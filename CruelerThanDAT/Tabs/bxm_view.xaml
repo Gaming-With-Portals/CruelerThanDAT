@@ -1,0 +1,50 @@
+﻿<Page x:Class="CruelerThanDAT.Tabs.bxm_view"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:CruelerThanDAT.Tabs"
+      xmlns:adonisExtensions="clr-namespace:AdonisUI.Extensions;assembly=AdonisUI"
+      mc:Ignorable="d" 
+      d:DesignHeight="450" d:DesignWidth="800"
+      Title="bxm_view">
+
+    <Grid adonisExtensions:LayerExtension.IncreaseLayer="True">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="237*"/>
+            <ColumnDefinition Width="163*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="25"></RowDefinition>
+            <RowDefinition></RowDefinition>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.ColumnSpan="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="50"></ColumnDefinition>
+                <ColumnDefinition Width="150"></ColumnDefinition>
+                <ColumnDefinition Width="180"></ColumnDefinition>
+            </Grid.ColumnDefinitions>
+
+            <Button Content="Save" Click="Save_Click"></Button>
+            <Button Content="Save .XML file to disk" Grid.Column="1" Click="WriteXMLToDisk"></Button>
+            <Button Content="Import XML or BXM from disk" Grid.Column="3" Click="ImportXML"></Button>
+        </Grid>
+
+        <Grid Grid.Row="1" Grid.ColumnSpan="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="14*"/>
+                <RowDefinition Height="437*"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="20"></ColumnDefinition>
+                <ColumnDefinition Width="49*"></ColumnDefinition>
+                <ColumnDefinition Width="146*"/>
+            </Grid.ColumnDefinitions>
+            <Label Content="1" Name="NumberBar" Grid.RowSpan="2" Margin="0,3,0,0"/>
+            <TextBox TextAlignment="Left" VerticalContentAlignment="Top" Text="XML" Name="XML" Grid.Column="1" Foreground="White" Grid.RowSpan="2" adonisExtensions:CursorSpotlightExtension.RelativeSpotlightSize="0" Grid.ColumnSpan="2"/>
+        </Grid>
+
+
+    </Grid>
+</Page>

@@ -1,0 +1,45 @@
+﻿<Page x:Class="CruelerThanDAT.Tabs.dds_view"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:CruelerThanDAT.Tabs"
+      mc:Ignorable="d" 
+      xmlns:adonisExtensions="clr-namespace:AdonisUI.Extensions;assembly=AdonisUI"
+      d:DesignHeight="450" d:DesignWidth="800"
+      Title="dds_view">
+
+    <Grid adonisExtensions:LayerExtension.IncreaseLayer="True">
+
+
+        <Grid Grid.ColumnSpan="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150"></ColumnDefinition>
+                <ColumnDefinition Width="*"></ColumnDefinition>
+            </Grid.ColumnDefinitions>
+            
+            <StackPanel>
+                <Button Content="Export As PNG" Name="BMP_Export" Click="BMP_Export_Click"></Button>
+            </StackPanel>
+            <Grid Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+
+                <Image Name="DisplayImage" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Grid.Row="2">
+                    <Image.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Flip X" Name="Flip_X" Click="Flip_X_Click"></MenuItem>
+                            <MenuItem Header="Flip Y" Name="Flip_Y" Click="Flip_Y_Click"></MenuItem>
+
+                        </ContextMenu>
+                    </Image.ContextMenu>
+                </Image>
+
+                
+            </Grid>
+        </Grid>
+        <Label Name="Data" VerticalAlignment="Bottom"></Label>
+
+
+
+
+    </Grid>
+</Page>
