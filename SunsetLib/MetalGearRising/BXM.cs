@@ -297,9 +297,9 @@ namespace SunsetLib.MetalGearRising
                     reader.WriteByte((byte)(uint)item);
                 }
 
-                reader.WriteByte(0);
+                reader.WriteByte(\x00); // TODO: Check when I get to a windows machine
             }
-            reader.WriteByte(0);
+            reader.WriteByte(\x00);
             return reader.GetArray();
         }
         
