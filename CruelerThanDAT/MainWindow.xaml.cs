@@ -31,7 +31,7 @@ namespace CruelerThanDAT
 {
     public static class Application_Data
     {
-        public static string version = "BETA 4";
+        public static string version = "BETA 5";
         public static int internal_version = 0; // for ze update server
         public static string optimized_for = "Metal Gear Rising: Revengence";
 
@@ -339,7 +339,7 @@ namespace CruelerThanDAT
                                     file_stack_panel = new StackPanel();
                                     file_stack_panel.Orientation = Orientation.Horizontal;
                                     image = new Image();
-                                    image.Source = GetIconFromMap(".wtp");
+                                    image.Source = dds;
 
                                     string extension = Get_File_Extension_From_Text(ddsobject.Data);
 
@@ -495,7 +495,26 @@ namespace CruelerThanDAT
                     tabItem.Content = frame;
 
                     tab_control.Items.Add(tabItem);
-                }else if (System.IO.Path.GetExtension(GetFileNodeFromTag(treeViewItem).Name) == ".texture")
+                }
+                else if (System.IO.Path.GetExtension(GetFileNodeFromTag(treeViewItem).Name) == ".bnk")
+                {
+
+                    // Create a new TabItem
+                    CloseableTabItem tabItem = new CloseableTabItem();
+                    tabItem.SetHeader(GetFileNodeFromTag(treeViewItem).Name);
+
+                    // Create a Frame to host the Page
+                    Frame frame = new Frame();
+                    frame.NavigationUIVisibility = System.Windows.Navigation.NavigationUIVisibility.Hidden;
+                    frame.Content = new bnk_view(GetFileNodeFromTag(treeViewItem));  // Replace YourPage with your Page class
+
+                    // Set the Frame as the content of the TabItem
+                    tabItem.Content = frame;
+
+                    //tab_control.Items.Add(tabItem);
+
+                }
+                else if (System.IO.Path.GetExtension(GetFileNodeFromTag(treeViewItem).Name) == ".texture")
                 {
 
 

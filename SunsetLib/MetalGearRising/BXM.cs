@@ -128,18 +128,11 @@ namespace SunsetLib.MetalGearRising
             return list.ToArray();
         }
 
-        private int[] FormatStringAsIntegerArray(string value)
+        private byte[] FormatStringAsIntegerArray(string value)
         {
-            
-            byte[] utf8Bytes = Encoding.UTF8.GetBytes(value);
 
-            int[] utf8Ints = new int[utf8Bytes.Length];
-            for (int i = 0; i < utf8Bytes.Length; i++)
-            {
-                utf8Ints[i] = utf8Bytes[i];
-            }
 
-            return utf8Ints;
+            return Encoding.UTF8.GetBytes(value);
         }
 
         private string _getElementText(XElement element)
@@ -160,12 +153,12 @@ namespace SunsetLib.MetalGearRising
         }
 
 
-        private void tryAddString(string String, HashSet<string> uniqueStringsSet, List<(string, List<int>)> uniqueStrings)
+        private void tryAddString(string String, HashSet<string> uniqueStringsSet, List<(string, List<byte>)> uniqueStrings)
         {
             if (!string.IsNullOrEmpty(String) && !uniqueStringsSet.Contains(String))
             {
-                uniqueStrings.Add((String, FormatStringAsIntegerArray(String).ToList()));
-                uniqueStringsSet.Add(String);
+                uniqueStrings.Add((String.Trim(), Encoding.UTF8.GetBytes(String.Trim()).ToList()));
+                uniqueStringsSet.Add(String.Trim());
             }
         }
 
@@ -176,7 +169,7 @@ namespace SunsetLib.MetalGearRising
             nodes = getNodes(element).ToList();
 
             HashSet<string> uniqueStringsSet = new HashSet<string>();
-            List<(string, List<int>)> uniqueStrings = new List<(string, List<int>)>();
+            List<(string, List<byte>)> uniqueStrings = new List<(string, List<byte>)>();
 
             foreach (XElement node in nodes)
             {
@@ -260,7 +253,7 @@ namespace SunsetLib.MetalGearRising
             }
 
             BxmHeader header = new BxmHeader();
-            header.type = "BXM\x00";
+            header.type = "XML\x00";
             header.flags = 0;
             header.nodeCount = nodeInfos.Count;
             header.dataCount = dataOffsets.Count;
@@ -292,14 +285,16 @@ namespace SunsetLib.MetalGearRising
             }
             foreach (var stringobj in uniqueStrings)
             {
+                Debug.WriteLine(Encoding.UTF8.GetString(stringobj.Item2.ToArray()));
                 foreach (int item in stringobj.Item2)
                 {
-                    reader.WriteByte((byte)(uint)item);
+                    reader.WriteByte((byte)item);
+                    
                 }
 
-                reader.WriteByte(\x00); // TODO: Check when I get to a windows machine
+                reader.WriteByte(0x00); // TODO: Check when I get to a windows machine
             }
-            reader.WriteByte(\x00);
+            reader.WriteByte(0x00);
             return reader.GetArray();
         }
         
