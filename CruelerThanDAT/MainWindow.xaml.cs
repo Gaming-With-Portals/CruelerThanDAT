@@ -41,6 +41,7 @@ namespace CruelerThanDAT
 
     public partial class MainWindow
     {
+        StreamWriter log_file;
         TreeViewItem selected_object;
         string[] VALID_DAT_EXTENSIONS = { ".dat", ".dtt", ".eff", ".evn", ".eft" };
         FileNode _base_node;
@@ -53,7 +54,7 @@ namespace CruelerThanDAT
         public MainWindow()
         {
             InitializeComponent();
-            Title = "CruelerThan.DAT | v" + Application_Data.version + " | " + Application_Data.optimized_for;
+            Title = "CruelerThan.DAT | Version: " + Application_Data.version + " | " + Application_Data.optimized_for;
             icon_map = new Dictionary<string, BitmapImage>();
             icon_map.Add(".dat", new BitmapImage(new Uri(System.AppDomain.CurrentDomain.BaseDirectory + "images\\dat.png")));
             icon_map.Add(".dtt", new BitmapImage(new Uri(System.AppDomain.CurrentDomain.BaseDirectory + "images\\dat.png")));
@@ -73,9 +74,10 @@ namespace CruelerThanDAT
             icon_map.Add("default", new BitmapImage(new Uri(System.AppDomain.CurrentDomain.BaseDirectory + "images\\default.png")));
             icon_map.Add(".hkx", new BitmapImage(new Uri(System.AppDomain.CurrentDomain.BaseDirectory + "images\\havok.png")));
             Update_Crueler_Status(icon_map.Count.ToString() + " icon(s) loaded!");
-
+            log_file = new StreamWriter("CruelerThanDAT.log");
             string base_dir = System.AppDomain.CurrentDomain.BaseDirectory;
-
+            log_file.WriteLine("CRUELERTHANDAT, V" + Application_Data.version + " FOR " + Application_Data.optimized_for);
+            log_file.WriteLine("Initalized successfully!");
 
             if (!System.IO.Path.Exists(System.IO.Path.Join(base_dir, "plugins"))){
                 System.IO.Directory.CreateDirectory(System.IO.Path.Join(base_dir, "plugins"));
@@ -88,7 +90,7 @@ namespace CruelerThanDAT
             {
                 System.IO.Directory.CreateDirectory(System.IO.Path.Join(base_dir, "userdata", Environment.UserName));
             }
-
+            log_file.Flush();
         }
 
         private void Update_Crueler_Status(string status)
@@ -107,8 +109,11 @@ namespace CruelerThanDAT
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
                 string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                log_file.WriteLine("User dropped file: " + files[0]);
                 Open_File_From_String(files[0]);
+                log_file.Flush();
             }
+
 
         }
 
@@ -232,6 +237,7 @@ namespace CruelerThanDAT
                     Build_Treeview(child, tmp_item);
                 }else if (System.IO.Path.GetExtension(child.Name) == ".bnk")
                 {
+                    log_file.WriteLine("Extracting WEM files from BNK.");
                     try
                     {
                         Systems.BNK bnk = new Systems.BNK();
@@ -254,15 +260,16 @@ namespace CruelerThanDAT
                     catch
                     {
                         System.Diagnostics.Debug.WriteLine("Error loading BNK");
+                        log_file.WriteLine("! Error loading BNK");
                     }
 
                 }else if (child.Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".wta")
                 {
                     // we gotta load the DTT now
-                    string dtt_path = System.IO.Path.GetDirectoryName(loaded_file_path) + "\\" + System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".dtt";
+                    string dtt_path = System.IO.Path.Join(System.IO.Path.GetDirectoryName(loaded_file_path), System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".dtt");
                     if (System.IO.Path.Exists(dtt_path))
                     {
-                        
+                        log_file.WriteLine("Loading DTT.");
                         DatFileEntry[] dttfiles = DatFile.Load(File.ReadAllBytes(dtt_path));
                         DatFileEntry wtpfile;
                         foreach ( DatFileEntry datfile in dttfiles)
@@ -276,6 +283,7 @@ namespace CruelerThanDAT
                                 List<FileNode> dds_children = new List<FileNode>();
                                 foreach (DDSFile ddsobject in dds_texture)
                                 {
+                                    log_file.WriteLine("Ripping texture: " + ddsobject.ID.ToString());
                                     TreeViewItem tmp_dds_item = new TreeViewItem();
                                     file_stack_panel = new StackPanel();
                                     file_stack_panel.Orientation = Orientation.Horizontal;
@@ -314,6 +322,7 @@ namespace CruelerThanDAT
                     else
                     {
                         System.Diagnostics.Debug.WriteLine("Unable to load DTT file");
+                        Update_Crueler_Status("Texture load error.");
                     }
                     
 
@@ -322,7 +331,8 @@ namespace CruelerThanDAT
                 else if (child.Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".wtp")
                 {
                     // we gotta load the DTT now
-                    string dtt_path = System.IO.Path.GetDirectoryName(loaded_file_path) + "\\" + System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".dat";
+                    log_file.WriteLine("Loading DAT.");
+                    string dtt_path = System.IO.Path.Join(System.IO.Path.GetDirectoryName(loaded_file_path),System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".dat");
                     if (System.IO.Path.Exists(dtt_path))
                     {
 
@@ -339,6 +349,7 @@ namespace CruelerThanDAT
                                 List<FileNode> dds_children = new List<FileNode>();
                                 foreach (DDSFile ddsobject in dds_texture)
                                 {
+                                    log_file.WriteLine("Ripping Texture: " + ddsobject.ID.ToString());
                                     TreeViewItem tmp_dds_item = new TreeViewItem();
                                     file_stack_panel = new StackPanel();
                                     file_stack_panel.Orientation = Orientation.Horizontal;
@@ -377,6 +388,7 @@ namespace CruelerThanDAT
                     else
                     {
                         System.Diagnostics.Debug.WriteLine("Unable to load DTT file");
+                        Update_Crueler_Status("Texture load error.");
                     }
 
 
@@ -384,7 +396,7 @@ namespace CruelerThanDAT
                 }
                 else if (child.Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + "scr.wtb")
                 {
-
+                    log_file.WriteLine("Loading WTB Textures.");
                     Texture texture = new Texture();
                     DDSFile[] dds_texture = texture.LoadWTA_WTP(child.Data, child.Data);
                     Update_Crueler_Status("Fetching texture metdata from associated DAT");
@@ -392,7 +404,7 @@ namespace CruelerThanDAT
                     List<FileNode> dds_children = new List<FileNode>();
                     foreach (DDSFile ddsobject in dds_texture)
                     {
-
+                        log_file.WriteLine("Ripping Texture: " + ddsobject.ID.ToString());
                         TreeViewItem tmp_dds_item = new TreeViewItem();
                         file_stack_panel = new StackPanel();
                         file_stack_panel.Orientation = Orientation.Horizontal;
@@ -441,6 +453,12 @@ namespace CruelerThanDAT
 
 
 
+        }
+
+        private void Application_Exit(object sender, ExitEventArgs e)
+        {
+            log_file.Flush();
+            log_file.Close();
         }
 
         private string Get_Icon(string Extension)
