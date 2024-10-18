@@ -31,7 +31,7 @@ namespace CruelerThanDAT
 {
     public static class Application_Data
     {
-        public static string version = "BETA 5";
+        public static string version = "BETA 6";
         public static int internal_version = 0; // for ze update server
         public static string optimized_for = "Metal Gear Rising: Revengence";
 
@@ -280,7 +280,11 @@ namespace CruelerThanDAT
                                     file_stack_panel = new StackPanel();
                                     file_stack_panel.Orientation = Orientation.Horizontal;
                                     image = new Image();
-                                    image.Source = GetIconFromMap(".wtp");
+                                    WriteableBitmap dds = DDSHandler.DDSToBitmap(ddsobject.Data);
+                                    image.Source = new TransformedBitmap(dds,
+                                    new ScaleTransform(
+                                        32 / dds.Width,
+                                        32 / dds.Height));
 
                                     string extension = Get_File_Extension_From_Text(ddsobject.Data);
 
@@ -339,7 +343,11 @@ namespace CruelerThanDAT
                                     file_stack_panel = new StackPanel();
                                     file_stack_panel.Orientation = Orientation.Horizontal;
                                     image = new Image();
-                                    image.Source = dds;
+                                    WriteableBitmap dds = DDSHandler.DDSToBitmap(ddsobject.Data);
+                                    image.Source = new TransformedBitmap(dds,
+                                    new ScaleTransform(
+                                        32 / dds.Width,
+                                        32 / dds.Height));
 
                                     string extension = Get_File_Extension_From_Text(ddsobject.Data);
 
@@ -389,7 +397,11 @@ namespace CruelerThanDAT
                         file_stack_panel = new StackPanel();
                         file_stack_panel.Orientation = Orientation.Horizontal;
                         image = new Image();
-                        image.Source = GetIconFromMap(".wtp");
+                        WriteableBitmap dds = DDSHandler.DDSToBitmap(ddsobject.Data);
+                        image.Source = new TransformedBitmap(dds,
+                        new ScaleTransform(
+                            32 / dds.Width,
+                            32 / dds.Height));
 
                         string extension = Get_File_Extension_From_Text(ddsobject.Data);
 
