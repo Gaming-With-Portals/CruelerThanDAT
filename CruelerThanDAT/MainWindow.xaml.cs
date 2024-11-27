@@ -31,12 +31,25 @@ namespace CruelerThanDAT
 {
     public static class Application_Data
     {
-        public static string version = "BETA 6";
+        public static string version = "BETA 7";
         public static int internal_version = 0; // for ze update server
         public static string optimized_for = "Metal Gear Rising: Revengence";
 
 
     }
+
+    public class FileInformation
+    {
+        public bool edited_wta_file = false;
+        public string file_path = "";
+
+        public FileInformation(string path)
+        {
+            this.file_path = path;
+        }
+
+    }
+
 
 
     public partial class MainWindow
@@ -47,9 +60,10 @@ namespace CruelerThanDAT
         FileNode _base_node;
         Dictionary<string, BitmapImage> icon_map;
         string loaded_file_path = "";
-        bool edited_wta_file = false;
+
         bool dtt_save_required = false;
         bool dat_save_required = false;
+        List<FileInformation> file_infos = new List<FileInformation>();
         DDSFile[] wtp_wta_data;
         public MainWindow()
         {
@@ -79,7 +93,8 @@ namespace CruelerThanDAT
             log_file.WriteLine("CRUELERTHANDAT, V" + Application_Data.version + " FOR " + Application_Data.optimized_for);
             log_file.WriteLine("Initalized successfully!");
 
-            if (!System.IO.Path.Exists(System.IO.Path.Join(base_dir, "plugins"))){
+            if (!System.IO.Path.Exists(System.IO.Path.Join(base_dir, "plugins")))
+            {
                 System.IO.Directory.CreateDirectory(System.IO.Path.Join(base_dir, "plugins"));
             }
             if (!System.IO.Path.Exists(System.IO.Path.Join(base_dir, "userdata")))
@@ -126,7 +141,8 @@ namespace CruelerThanDAT
             if (header == 1196314761)
             {
                 return ".texture";
-            }else if (header == 542327876)
+            }
+            else if (header == 542327876)
             {
                 return ".texture";
             }
@@ -147,15 +163,16 @@ namespace CruelerThanDAT
                 Update_Crueler_Status("Opening DAT " + System.IO.Path.GetFileName(file_path));
                 _base_node = new FileNode(System.IO.Path.GetFileName(file_path), System.IO.File.ReadAllBytes(file_path));
                 TreeViewItem base_item = new TreeViewItem();
-
+                file_infos.Add(new FileInformation(loaded_file_path));
                 base_item.Header = System.IO.Path.GetFileName(file_path);
-                Build_Treeview(_base_node, base_item);
+                Build_Treeview(_base_node, base_item, file_infos.Count);
                 base_item.Tag = _base_node;
                 TreeView1.Items.Add(base_item);
                 Update_Crueler_Status("Ready.");
             }
-            else if (System.IO.Path.GetExtension(file_path) == ".bxm") {
-                
+            else if (System.IO.Path.GetExtension(file_path) == ".bxm")
+            {
+
                 Update_Crueler_Status("Converting...");
                 BXM bxm = new BXM();
                 XElement xml_file = bxm.read_bxm(File.ReadAllBytes(file_path));
@@ -206,7 +223,7 @@ namespace CruelerThanDAT
 
         }
 
-        private void Build_Treeview(FileNode node, TreeViewItem parent_item)
+        private void Build_Treeview(FileNode node, TreeViewItem parent_item, int idx)
         {
 
             foreach (var child in node.children)
@@ -216,8 +233,8 @@ namespace CruelerThanDAT
                 file_stack_panel.Orientation = Orientation.Horizontal;
                 Image image = new Image();
                 image.Source = GetIconFromMap(System.IO.Path.GetExtension(child.Name));
-                
-                
+                child.node_parent_idx = idx;
+
 
                 TextBlock lbl = new TextBlock
                 {
@@ -234,220 +251,18 @@ namespace CruelerThanDAT
 
                 if (child.has_children)
                 {
-                    Build_Treeview(child, tmp_item);
-                }else if (System.IO.Path.GetExtension(child.Name) == ".bnk")
-                {
-                    log_file.WriteLine("Extracting WEM files from BNK.");
-                    try
-                    {
-                        Systems.BNK bnk = new Systems.BNK();
-                        TreeViewItem bnk_audio = new TreeViewItem();
-                        bnk_audio.Header = "WEM Files";
-
-                        foreach (FileNode bnk_obj in bnk.Load_BNK(child.Data))
-                        {
-
-
-                            TreeViewItem tmp_bnk_item = new TreeViewItem();
-                            tmp_bnk_item.Header = bnk_obj.Name + ".wem";
-                            tmp_bnk_item.Tag = bnk_obj;
-                            ((FileNode)tmp_bnk_item.Tag).locked = true;
-                            bnk_audio.Items.Add(tmp_bnk_item);
-
-                        }
-                        tmp_item.Items.Add(bnk_audio);
-                    }
-                    catch
-                    {
-                        System.Diagnostics.Debug.WriteLine("Error loading BNK");
-                        log_file.WriteLine("! Error loading BNK");
-                    }
-
-                }else if (child.Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".wta")
-                {
-                    // we gotta load the DTT now
-                    string dtt_path = System.IO.Path.Join(System.IO.Path.GetDirectoryName(loaded_file_path), System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".dtt");
-                    if (System.IO.Path.Exists(dtt_path))
-                    {
-                        log_file.WriteLine("Loading DTT.");
-                        DatFileEntry[] dttfiles = DatFile.Load(File.ReadAllBytes(dtt_path));
-                        DatFileEntry wtpfile;
-                        foreach ( DatFileEntry datfile in dttfiles)
-                        {
-                            if (datfile.Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".wtp")
-                            {
-                                wtpfile = datfile;
-                                Texture texture = new Texture();
-                                DDSFile[] dds_texture = texture.LoadWTA_WTP(child.Data, wtpfile.Data);
-                                Update_Crueler_Status("Fetching texture image data from associated DTT");
-                                List<FileNode> dds_children = new List<FileNode>();
-                                foreach (DDSFile ddsobject in dds_texture)
-                                {
-                                    log_file.WriteLine("Ripping texture: " + ddsobject.ID.ToString());
-                                    TreeViewItem tmp_dds_item = new TreeViewItem();
-                                    file_stack_panel = new StackPanel();
-                                    file_stack_panel.Orientation = Orientation.Horizontal;
-                                    image = new Image();
-                                    WriteableBitmap dds = DDSHandler.DDSToBitmap(ddsobject.Data);
-                                    image.Source = new TransformedBitmap(dds,
-                                    new ScaleTransform(
-                                        32 / dds.Width,
-                                        32 / dds.Height));
-
-                                    string extension = Get_File_Extension_From_Text(ddsobject.Data);
-
-                                    lbl = new TextBlock
-                                    {
-                                        Text = ddsobject.ID + extension,
-                                        TextWrapping = TextWrapping.NoWrap,
-                                        Width = 300
-                                    };
-                                    file_stack_panel.Children.Add(image);
-                                    file_stack_panel.Children.Add(lbl);
-                                    FileNode dds_node = new FileNode(ddsobject.ID + extension, ddsobject.Data);
-
-                                    dds_children.Add(dds_node);
-                                    tmp_dds_item.Header = file_stack_panel;
-                                    tmp_dds_item.Tag = dds_node;
-
-                                    tmp_item.Items.Add(tmp_dds_item);
-                                }
-                                GetFileNodeFromTag(tmp_item).nodetype = NodeType.texture;
-                                GetFileNodeFromTag(tmp_item).children = dds_children.ToArray();
-                                break;
-                            }
-                        }
-
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("Unable to load DTT file");
-                        Update_Crueler_Status("Texture load error.");
-                    }
-                    
-
-
-                }
-                else if (child.Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".wtp")
-                {
-                    // we gotta load the DTT now
-                    log_file.WriteLine("Loading DAT.");
-                    string dtt_path = System.IO.Path.Join(System.IO.Path.GetDirectoryName(loaded_file_path),System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".dat");
-                    if (System.IO.Path.Exists(dtt_path))
-                    {
-
-                        DatFileEntry[] dttfiles = DatFile.Load(File.ReadAllBytes(dtt_path));
-                        DatFileEntry wtafile;
-                        foreach (DatFileEntry datfile in dttfiles)
-                        {
-                            if (datfile.Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".wta")
-                            {
-                                wtafile = datfile;
-                                Texture texture = new Texture();
-                                DDSFile[] dds_texture = texture.LoadWTA_WTP(wtafile.Data, child.Data);
-                                Update_Crueler_Status("Fetching texture image data from associated DTT");
-                                List<FileNode> dds_children = new List<FileNode>();
-                                foreach (DDSFile ddsobject in dds_texture)
-                                {
-                                    log_file.WriteLine("Ripping Texture: " + ddsobject.ID.ToString());
-                                    TreeViewItem tmp_dds_item = new TreeViewItem();
-                                    file_stack_panel = new StackPanel();
-                                    file_stack_panel.Orientation = Orientation.Horizontal;
-                                    image = new Image();
-                                    WriteableBitmap dds = DDSHandler.DDSToBitmap(ddsobject.Data);
-                                    image.Source = new TransformedBitmap(dds,
-                                    new ScaleTransform(
-                                        32 / dds.Width,
-                                        32 / dds.Height));
-
-                                    string extension = Get_File_Extension_From_Text(ddsobject.Data);
-
-                                    lbl = new TextBlock
-                                    {
-                                        Text = ddsobject.ID + extension,
-                                        TextWrapping = TextWrapping.NoWrap,
-                                        Width = 300
-                                    };
-                                    file_stack_panel.Children.Add(image);
-                                    file_stack_panel.Children.Add(lbl);
-                                    FileNode dds_node = new FileNode(ddsobject.ID + extension, ddsobject.Data);
-
-                                    dds_children.Add(dds_node);
-                                    tmp_dds_item.Header = file_stack_panel;
-                                    tmp_dds_item.Tag = dds_node;
-
-                                    tmp_item.Items.Add(tmp_dds_item);
-                                }
-                                GetFileNodeFromTag(tmp_item).nodetype = NodeType.texture;
-                                GetFileNodeFromTag(tmp_item).children = dds_children.ToArray();
-                                break;
-                            }
-                        }
-
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("Unable to load DTT file");
-                        Update_Crueler_Status("Texture load error.");
-                    }
-
-
-
-                }
-                else if (child.Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + "scr.wtb")
-                {
-                    log_file.WriteLine("Loading WTB Textures.");
-                    Texture texture = new Texture();
-                    DDSFile[] dds_texture = texture.LoadWTA_WTP(child.Data, child.Data);
-                    Update_Crueler_Status("Fetching texture metdata from associated DAT");
-                    GetFileNodeFromTag(tmp_item).texture_children = dds_texture;
-                    List<FileNode> dds_children = new List<FileNode>();
-                    foreach (DDSFile ddsobject in dds_texture)
-                    {
-                        log_file.WriteLine("Ripping Texture: " + ddsobject.ID.ToString());
-                        TreeViewItem tmp_dds_item = new TreeViewItem();
-                        file_stack_panel = new StackPanel();
-                        file_stack_panel.Orientation = Orientation.Horizontal;
-                        image = new Image();
-                        WriteableBitmap dds = DDSHandler.DDSToBitmap(ddsobject.Data);
-                        image.Source = new TransformedBitmap(dds,
-                        new ScaleTransform(
-                            32 / dds.Width,
-                            32 / dds.Height));
-
-                        string extension = Get_File_Extension_From_Text(ddsobject.Data);
-
-                        lbl = new TextBlock
-                        {
-                            Text = ddsobject.ID + extension,
-                            TextWrapping = TextWrapping.NoWrap,
-                            Width = 300
-                        };
-                        file_stack_panel.Children.Add(image);
-                        file_stack_panel.Children.Add(lbl);
-                        FileNode dds_node = new FileNode(ddsobject.ID + extension, ddsobject.Data);
-
-                        dds_children.Add(dds_node);
-                        tmp_dds_item.Header = file_stack_panel;
-                        tmp_dds_item.Tag = dds_node;
-
-                        tmp_item.Items.Add(tmp_dds_item);
-                    }
-                    GetFileNodeFromTag(tmp_item).nodetype = NodeType.texture;
-                    GetFileNodeFromTag(tmp_item).children = dds_children.ToArray();
-
-
-
+                    Build_Treeview(child, tmp_item, idx);
                 }
                 else
-                    {
-                        System.Diagnostics.Debug.WriteLine("Unable to load DTT file");
-                    }
+                {
+                    System.Diagnostics.Debug.WriteLine("Unable to load DTT file");
+                }
 
 
 
-               
+
                 parent_item.Items.Add(tmp_item);
+
 
             }
 
@@ -607,7 +422,7 @@ namespace CruelerThanDAT
                 var dialog = new Microsoft.Win32.SaveFileDialog();
                 dialog.FileName = GetFileNodeFromTag(selected_object).Name;
                 dialog.DefaultExt = System.IO.Path.GetExtension(GetFileNodeFromTag(selected_object).Name); // Default file extension
-                
+
                 dialog.Filter = "Suggested File Extension (" + System.IO.Path.GetExtension(GetFileNodeFromTag(selected_object).Name) + ")|*" + System.IO.Path.GetExtension(GetFileNodeFromTag(selected_object).Name); // Filter files by extension
                 dialog.Title = "Export file";
                 // Show open file dialog box
@@ -625,12 +440,13 @@ namespace CruelerThanDAT
                         Save((string)dialog.FileName, selected_object);
                         return;
 
-                    }else if (System.IO.Path.GetExtension(GetFileNodeFromTag(selected_object).Name) == ".wta")
+                    }
+                    else if (System.IO.Path.GetExtension(GetFileNodeFromTag(selected_object).Name) == ".wta")
                     {
-                        
+
                         System.Diagnostics.Debug.WriteLine("Compiling Textures, Count: " + GetFileNodeFromTag(selected_object).children.Length.ToString());
                         DDSFile[] output = Texture.SaveWTA_WTP(GetFileNodeFromTag(selected_object).children);
-                        
+
 
                         data = output[1].Data;
                         using (var fs = new FileStream(System.IO.Path.GetDirectoryName(dialog.FileName) + "\\" + System.IO.Path.GetFileNameWithoutExtension(dialog.FileName) + ".wtp", FileMode.Create, FileAccess.Write))
@@ -683,7 +499,7 @@ namespace CruelerThanDAT
                 var dialog = new Microsoft.Win32.OpenFileDialog();
                 if (filter_ext == ".texture")
                 {
-                    edited_wta_file = true;
+                    file_infos[GetFileNodeFromTag(selected_object).node_parent_idx - 1].edited_wta_file = true;
                     filter_ext = ".dds";
                     dialog.FilterIndex = 2;
 
@@ -700,7 +516,7 @@ namespace CruelerThanDAT
                 if (result == true)
                 {
                     ((FileNode)selected_object.Tag).Data = File.ReadAllBytes(dialog.FileName);
-                    
+
                 }
 
             }
@@ -726,7 +542,7 @@ namespace CruelerThanDAT
                 var dialog = new Microsoft.Win32.OpenFileDialog();
                 if (filter_ext == ".texture")
                 {
-                    edited_wta_file = true;
+                    file_infos[GetFileNodeFromTag(selected_object).node_parent_idx - 1].edited_wta_file = true;
 
                 }
                 TreeViewItem parent = (TreeViewItem)selected_object.Parent;
@@ -767,7 +583,7 @@ namespace CruelerThanDAT
 
                         break;
                     }
-                    
+
                 }
                 if (wtp_file == -1)
                 {
@@ -800,7 +616,7 @@ namespace CruelerThanDAT
 
                         break;
                     }
-                    
+
                 }
                 dttfiles[wtp_file].Data = wtp_wta_data[0].Data;
                 byte[] dtt_data = DatFile.Save(dttfiles);
@@ -813,7 +629,7 @@ namespace CruelerThanDAT
             }
         }
 
-            
+
         private Byte[] SaveDATRecursive(TreeViewItem Tree_View_Item)
         {
             List<DatFileEntry> files_out = new List<DatFileEntry>();
@@ -830,37 +646,7 @@ namespace CruelerThanDAT
                         tmp_file.Data = tmp_bytes;
                         files_out.Add(tmp_file);
                     }
-                    else if (((FileNode)Node.Tag).Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".wta" && edited_wta_file)
-                    {
-                        DDSFile[] tex_output = Texture.SaveWTA_WTP(((FileNode)Node.Tag).children);
-                        wtp_wta_data = tex_output;
-                        DatFileEntry tmp_file = new DatFileEntry();
-                        tmp_file.Name = ((FileNode)Node.Tag).Name;
-                        tmp_file.Data = tex_output[0].Data;
-                        files_out.Add(tmp_file);
-                        dtt_save_required = true;
 
-                    }
-                    else if (((FileNode)Node.Tag).Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + ".wtp" && edited_wta_file)
-                    {
-                        DDSFile[] tex_output = Texture.SaveWTA_WTP(((FileNode)Node.Tag).children);
-                        wtp_wta_data = tex_output;
-                        DatFileEntry tmp_file = new DatFileEntry();
-                        tmp_file.Name = ((FileNode)Node.Tag).Name;
-                        tmp_file.Data = tex_output[1].Data;
-                        files_out.Add(tmp_file);
-                        dat_save_required = true;
-
-                    }
-                    else if (((FileNode)Node.Tag).Name == System.IO.Path.GetFileNameWithoutExtension(loaded_file_path) + "scr.wtb" && edited_wta_file)
-                    {
-                        byte[] tex_output = Texture.SaveWTB(((FileNode)Node.Tag).children);
-                        DatFileEntry tmp_file = new DatFileEntry();
-                        tmp_file.Name = ((FileNode)Node.Tag).Name;
-                        tmp_file.Data = tex_output;
-                        files_out.Add(tmp_file);
-
-                    }
                     else
                     {
                         DatFileEntry tmp_file = new DatFileEntry();

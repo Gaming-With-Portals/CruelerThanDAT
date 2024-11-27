@@ -45,6 +45,7 @@ namespace SunsetLib
         public FileNode[] children;
         public DDSFile[] texture_children;
         public NodeType nodetype = NodeType.standard;
+        public int node_parent_idx = -1;
 
         public bool has_children;
         public bool locked = false;
