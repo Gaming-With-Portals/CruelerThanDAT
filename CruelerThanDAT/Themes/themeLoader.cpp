@@ -276,8 +276,7 @@ void ImGuiDarkStyle()
 
 void ThemeManager::UpdateThemeList() {
 	for (const auto& entry : fs::directory_iterator("Assets\\Themes")) {
-		std::cout << entry.path() << std::endl;
-		toml::table tbl = toml::parse_file(entry.path().string());
+
 
 
 

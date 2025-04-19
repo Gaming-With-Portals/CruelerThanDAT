@@ -101,6 +101,21 @@
     <ClInclude Include="Core\Utility\ImGuiExtended.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Core\Utility\WMB.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="globals.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Utility\BasicShaders.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\CTDSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Utility\FileUtils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Font Include="Assets\codicon.ttf" />

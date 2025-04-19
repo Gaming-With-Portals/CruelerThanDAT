@@ -8,6 +8,7 @@
 #include "imgui_impl_dx9.h"
 #include "imgui_impl_win32.h"
 #include <iostream>
+#include "globals.h"
 #include "Core/FileNodes.h"
 #include <vector>
 #include <fstream>
@@ -17,6 +18,8 @@
 #include <chrono>
 #include "Core/Log.h"
 #include "Themes/themeLoader.h"
+#include "Core/Utility/BasicShaders.h"
+#include "Core/Utility/FileUtils.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
@@ -25,6 +28,13 @@ static LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
 static bool                     g_DeviceLost = false;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
 static D3DPRESENT_PARAMETERS    g_d3dpp = {};
+
+static LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
+static LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
+
+static D3DXMATRIX viewMatrix;
+static D3DXMATRIX projMatrix;
+
 bool showViewport = true;
 std::vector<FileNode*> openFiles;
 ThemeManager* themeManager;
@@ -118,26 +128,6 @@ namespace HelperFunction {
     }
 }
 
-
-
-bool ReadFileIntoVector(const std::string& filePath, std::vector<char>& data) {
-    std::ifstream file(filePath, std::ios::binary);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open file: " << filePath << std::endl;
-        return false;
-    }
-
-    // Get file size and resize the vector to hold the file data
-    file.seekg(0, std::ios::end);
-    size_t fileSize = file.tellg();
-    file.seekg(0, std::ios::beg);
-    data.resize(fileSize);
-
-    // Read the file into the vector
-    file.read(reinterpret_cast<char*>(data.data()), fileSize);
-    return true;
-}
-
 FileNode* FileNodeFromFilepath(std::string filePath) {
     auto start = std::chrono::high_resolution_clock::now();
     std::vector<char> fileData;
@@ -208,7 +198,7 @@ bool CreateDeviceD3D(HWND hWnd)
 {
     if ((g_pD3D = Direct3DCreate9(D3D_SDK_VERSION)) == nullptr)
         return false;
-
+    
     // Create the D3DDevice
     ZeroMemory(&g_d3dpp, sizeof(g_d3dpp));
     g_d3dpp.Windowed = TRUE;
@@ -220,6 +210,23 @@ bool CreateDeviceD3D(HWND hWnd)
     //g_d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;   // Present without vsync, maximum unthrottled framerate
     if (g_pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &g_d3dpp, &g_pd3dDevice) < 0)
         return false;
+
+	LPD3DXBUFFER pVertexShaderBuffer = nullptr;
+	LPD3DXBUFFER pPixelShaderBuffer = nullptr;
+
+	D3DXCompileShader(solidColorVTX, strlen(solidColorVTX),
+		NULL, NULL, "main", "vs_3_0", 0,
+		&pVertexShaderBuffer, NULL, NULL);
+
+	D3DXCompileShader(solidColorPX, strlen(solidColorPX),
+		NULL, NULL, "main", "ps_3_0", 0,
+		&pPixelShaderBuffer, NULL, NULL);
+
+    g_pd3dDevice->CreateVertexShader((DWORD*)pVertexShaderBuffer->GetBufferPointer(), &pSolidShaderVTX);
+    g_pd3dDevice->CreatePixelShader((DWORD*)pPixelShaderBuffer->GetBufferPointer(), &pSolidShaderPX);
+
+    g_pd3dDevice->SetVertexShader(pSolidShaderVTX);
+    g_pd3dDevice->SetPixelShader(pSolidShaderPX);
 
     return true;
 }
@@ -243,6 +250,7 @@ void ResetDevice()
 
 
 void RenderFrame() {
+
     // Start the ImGui frame
     ImGui_ImplDX9_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -256,18 +264,7 @@ void RenderFrame() {
     if (ImGui::Button("Load")) {
 
     }
-    ImGui::SameLine();
-    if (ImGui::Button("ImGui Theme")) {
-        themeManager->ChooseStyle(0);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Visual Studio Theme")) {
-        themeManager->ChooseStyle(1);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Half Life Theme")) {
-        themeManager->ChooseStyle(2);
-    }
+
 
 
     ImGui::End();
@@ -280,6 +277,12 @@ void RenderFrame() {
     if (ImGui::BeginTabBar("primary_control")) {
         
         if (ImGui::BeginTabItem("Data Viewer")) {
+            if (openFiles.size() == 0) {
+                ImGui::Text("No open files yet!");
+                ImGui::Text("Drag a file onto the window to get started");
+            }
+
+
             for (FileNode* node : openFiles) {
                 node->Render();
             }
@@ -288,11 +291,22 @@ void RenderFrame() {
         }
         if (ImGui::BeginTabItem("CPK Viewer")) {
 
+
+
+
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Configuration")) {
             ImGui::Text("Theme");
-
+            if (ImGui::Button("ImGui Theme")) {
+                themeManager->ChooseStyle(0);
+            }
+            if (ImGui::Button("Visual Studio Theme")) {
+                themeManager->ChooseStyle(1);
+            }
+            if (ImGui::Button("Half Life Theme")) {
+                themeManager->ChooseStyle(2);
+            }
 
             ImGui::EndTabItem();
         }
@@ -327,7 +341,8 @@ void RenderFrame() {
     }
 
     ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
-    
+
+
 
 	if (FileNode::selectedNode) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
@@ -357,6 +372,9 @@ void RenderFrame() {
         }
         else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
             showViewport = false;
+            WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
+
+            wmbNode->RenderGUI();
         }
 
 	}
@@ -364,6 +382,8 @@ void RenderFrame() {
 
     ImGui::End();
     
+
+
 
     
     if (cruelerLog) {
@@ -423,8 +443,15 @@ void RenderFrame() {
     g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
     if (g_pd3dDevice->BeginScene() >= 0)
     {
+        if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
+            WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
+            wmbNode->RenderMesh();
+        }
+
         ImGui::Render();
         ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+
+
         g_pd3dDevice->EndScene();
     }
     HRESULT result = g_pd3dDevice->Present(nullptr, nullptr, nullptr, nullptr);

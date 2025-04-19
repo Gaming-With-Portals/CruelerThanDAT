@@ -4,12 +4,12 @@
 #define NOMINMAX
 #include <string>
 #include <vector>
+#include "../globals.h"
 #include "../imgui.h"
 #include "BinaryHandler.h"
 #include "../Assets/CodIcons.h"
 #include <windows.h>
 #include <fstream> 
-#include "d3d9.h"
 #include "Log.h"
 #include <algorithm>
 #include <cmath>
@@ -20,6 +20,8 @@
 #include <sstream>
 #include <format>
 #include "Utility/ImGuiExtended.h"
+#include "Utility/WMB.h"
+#include <d3dx9.h>
 /**/
 
 
@@ -79,6 +81,7 @@ public:
 	FileNodeTypes nodeType;
 	const wchar_t* fileFilter = L"All Files(*.*)\0*.*;\0";
 	bool loadFailed = false;
+	bool isEdited = false;
 
 	static FileNode* selectedNode;
 
@@ -92,7 +95,9 @@ public:
 		fileExtension = fileName.substr(fileName.find_last_of(".") + 1);
 	}
 
-	virtual ~FileNode() {}
+	virtual ~FileNode() {
+
+	}
 
 	virtual void PopupOptionsEx() {
 
@@ -374,6 +379,9 @@ public:
 
 	}
 	void SaveFile() override {
+		if (!isEdited) {
+			return;
+		}
 		BinaryWriter* writer = new BinaryWriter();
 
 		writer->WriteString("LY2");
@@ -435,9 +443,10 @@ public:
 						ImGui::PushID(i);
 
 						if (ImGui::CollapsingHeader((node.prop_category + std::format("{:04x}", node.prop_id)).c_str())) {
+							isEdited = true;
 							ImGui::InputFloat3("Position", instance.pos, "%.2f");
 							ImGui::InputFloat3("Scale", instance.scale, "%.2f");
-							ImGui::InputFloat3("Rotation", instance.rot, "%.2f");
+							//ImGui::InputFloat3("Rotation", instance.rot, "%.2f");
 
 							if (ImGui::Button("-")) {
 								node.instances.erase(node.instances.begin() + j);
@@ -458,6 +467,7 @@ public:
 				ImGui::InputText("", input_id, 7);
 				ImGui::SameLine();
 				if (ImGui::Button("+")) {
+					isEdited = true;
 					std::string hexStr(input_id + 2, 4);
 					LY2Node node = LY2Node();
 					node.prop_id = std::stoi(hexStr, nullptr, 16);
@@ -842,8 +852,27 @@ public:
 
 };
 
+class CruelerMesh {
+public:
+
+	std::string name = "N/A";
+	bool visibility = true;
+	int vtxfmt = 0;
+	LPDIRECT3DVERTEXBUFFER9 vertexBuffer;
+	int vertexCount;
+	LPDIRECT3DINDEXBUFFER9 indexBuffer;
+	int indexCount;
+	int structSize;
+
+
+};
+
 class WmbFileNode : public FileNode {
 public:
+	std::vector<CruelerMesh*> displayMeshes;
+
+	float rotationAngle = 0;;
+
 	WmbFileNode(std::string fName) : FileNode(fName) {
 		fileIcon = ICON_CI_SYMBOL_METHOD;
 		TextColor = { 1.0f, 0.671f, 0.0f, 1.0f };
@@ -851,10 +880,170 @@ public:
 		fileFilter = L"Platinum Model File(*.wmb)\0*.wmb;\0";
 	}
 	void LoadFile() override {
+		BinaryReader reader(fileData, true);
+		reader.SetEndianess(fileIsBigEndian);
+
+		WMBHeader header = WMBHeader();
+		header = reader.ReadStruct<WMBHeader>();
+
+		reader.Seek(header.offsetVertexGroups);
+		std::vector<WMBVertexGroup> vertexGroups = reader.ReadStructs<WMBVertexGroup>(header.numVertexGroups);
+		reader.Seek(header.offsetBatches);
+		std::vector<WMBBatch> batches = reader.ReadStructs<WMBBatch>(header.numBatches);
+		reader.Seek(header.offsetMeshes);
+		std::vector<WMBMesh> meshes = reader.ReadStructs<WMBMesh>(header.numMeshes);
+
+		for (WMBMesh& mesh : meshes) {
+			CruelerMesh* ctdmesh = new CruelerMesh();
+			ctdmesh->vtxfmt = header.vertexFormat;
+			reader.Seek(mesh.offsetName);
+			ctdmesh->name = reader.ReadNullTerminatedString();
+			reader.Seek(mesh.offsetBatches); // this format sucks :fire:
+			int meshBatchID = reader.ReadUINT16();
+			WMBBatch& activeBatch = batches[meshBatchID];
+			WMBVertexGroup& activeVtxGroup = vertexGroups[activeBatch.vertexGroupIndex];
+
+			ctdmesh->vertexCount = activeVtxGroup.numVertexes;
+			ctdmesh->indexCount = activeVtxGroup.numIndexes;
+
+			reader.Seek(activeVtxGroup.offsetIndexes + (sizeof(short) * activeBatch.indexStart));
+			std::vector<unsigned short> indices;
+			for (int x = 0; x < activeBatch.numIndices; x++) {
+				indices.push_back(reader.ReadUINT16());
+			}
+
+			g_pd3dDevice->CreateIndexBuffer(activeBatch.numIndices * sizeof(short), 0,
+				D3DFMT_INDEX16, D3DPOOL_MANAGED,
+				&ctdmesh->indexBuffer, nullptr);
+			void* pIndexData = nullptr;
+			ctdmesh->indexBuffer->Lock(0, 0, &pIndexData, 0);
+
+			std::memcpy(pIndexData, indices.data(), indices.size() * sizeof(short));
+			ctdmesh->indexBuffer->Unlock();
+
+			
+
+			// vertex format lore
+			if (header.vertexFormat == 263){
+				reader.Seek(activeVtxGroup.offsetVertexes + activeBatch.vertexStart * sizeof(WMBVertexA));
+				D3DVERTEXELEMENT9 WMBVertexADecl[] = {
+					{ 0, offsetof(WMBVertexA, position), D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+					{ 0, offsetof(WMBVertexA, u), D3DDECLTYPE_SHORT4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+					{ 0, offsetof(WMBVertexA, normals), D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+					{ 0, offsetof(WMBVertexA, tangents), D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
+					D3DDECL_END() // This marks the end of the vertex declaration
+				};
+				ctdmesh->structSize = sizeof(WMBVertexA);
+
+				IDirect3DVertexDeclaration9* vertexDecl;
+				g_pd3dDevice->CreateVertexDeclaration(WMBVertexADecl, &vertexDecl);
+				g_pd3dDevice->SetVertexDeclaration(vertexDecl);
+
+				std::vector<WMBVertexA> vertexes = reader.ReadStructs<WMBVertexA>(activeBatch.numVertices);
+
+				g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(WMBVertexA),
+					0, 0,
+					D3DPOOL_DEFAULT, &ctdmesh->vertexBuffer, NULL);
+
+				void* pVertexData = nullptr;
+				HRESULT hr = ctdmesh->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+				std::memcpy(pVertexData, vertexes.data(), activeBatch.numVertices * sizeof(WMBVertexA));
+				ctdmesh->vertexBuffer->Unlock();
+
+
+			}
+			else if (header.vertexFormat == 65847 || header.vertexFormat == 66359) {
+
+				reader.Seek(activeVtxGroup.offsetVertexes + activeBatch.vertexStart * sizeof(WMBVertex65847));
+				D3DVERTEXELEMENT9 WMBVertexADecl[] = {
+					{ 0, offsetof(WMBVertex65847, position),   D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+					{ 0, offsetof(WMBVertex65847, u),          D3DDECLTYPE_SHORT4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+					{ 0, offsetof(WMBVertex65847, normals),    D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+					{ 0, offsetof(WMBVertex65847, tangents),   D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
+					{ 0, offsetof(WMBVertex65847, boneIndexes), D3DDECLTYPE_FLOAT1, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
+					{ 0, offsetof(WMBVertex65847, boneWeights), D3DDECLTYPE_FLOAT1, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
+					D3DDECL_END()
+				};
+				ctdmesh->structSize = sizeof(WMBVertex65847);
+				IDirect3DVertexDeclaration9* vertexDecl;
+				g_pd3dDevice->CreateVertexDeclaration(WMBVertexADecl, &vertexDecl);
+				g_pd3dDevice->SetVertexDeclaration(vertexDecl);
+
+				std::vector<WMBVertex65847> vertexes = reader.ReadStructs<WMBVertex65847>(activeBatch.numVertices);
+
+				g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(WMBVertex65847),
+					0, 0,
+					D3DPOOL_DEFAULT, &ctdmesh->vertexBuffer, NULL);
+
+				void* pVertexData = nullptr;
+				HRESULT hr = ctdmesh->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+				std::memcpy(pVertexData, vertexes.data(), activeBatch.numVertices * sizeof(WMBVertex65847));
+				ctdmesh->vertexBuffer->Unlock();
+			}
+
+
+
+			displayMeshes.push_back(ctdmesh);
+		}
 
 	}
 	void SaveFile() override {
 
+	}
+
+
+	void RenderMesh() {
+		rotationAngle += 0.01f;
+		for (CruelerMesh* mesh : displayMeshes) {
+			if (mesh->visibility) {
+				g_pd3dDevice->SetIndices(mesh->indexBuffer);
+				g_pd3dDevice->SetStreamSource(0, mesh->vertexBuffer, 0, mesh->structSize);
+
+				D3DXMATRIX matWorld, matView, matProj, matScale, matRotate, matWVP;
+
+
+				D3DXMatrixIdentity(&matView);
+				D3DXMatrixIdentity(&matProj);
+
+				// Rotate the mesh
+				D3DXMatrixRotationY(&matRotate, rotationAngle);
+				float scaleFactor = 0.4f;
+
+				D3DXMatrixScaling(&matScale, scaleFactor, scaleFactor, scaleFactor);
+				matWorld =  matScale * matRotate;
+				// Final WVP matrix
+				matWVP = matWorld * matView * matProj;
+
+
+				// Send it to the shader
+
+				g_pd3dDevice->SetVertexShader(pSolidShaderVTX);
+				g_pd3dDevice->SetPixelShader(pSolidShaderPX);
+
+				g_pd3dDevice->SetVertexShaderConstantF(0, (float*)&matWVP, 4);
+
+				g_pd3dDevice->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, mesh->vertexCount, 0, mesh->indexCount / 3);
+			}
+
+
+
+		}
+
+	}
+
+
+	void RenderGUI() {
+		ImGui::Text("WMB Meshes");
+		int i = 0;
+		for (CruelerMesh* mesh : displayMeshes) {
+			i += 1;
+			ImGui::Text((std::to_string(i) + ". ").c_str());
+			ImGui::SameLine();
+			ImGui::Checkbox((mesh->name).c_str(), &mesh->visibility);
+
+			
+
+		}
 	}
 
 };

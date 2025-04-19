@@ -7,6 +7,8 @@ void closeNode(FileNode* target) {
     if (it != openFiles.end()) { // Ensure it exists before erasing
         openFiles.erase(it);
     }
+
+	delete target;
 }
 
 

@@ -152,12 +152,17 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Core\BinaryHandler.h" />
+    <ClInclude Include="Core\CTDSettings.h" />
     <ClInclude Include="Core\FileNodes.h" />
     <ClInclude Include="Core\Log.h" />
+    <ClInclude Include="Core\Utility\BasicShaders.h" />
     <ClInclude Include="Core\Utility\CRC32.h" />
+    <ClInclude Include="Core\Utility\FileUtils.h" />
     <ClInclude Include="Core\Utility\HashDataContainer.h" />
     <ClInclude Include="Core\Utility\ImGuiExtended.h" />
+    <ClInclude Include="Core\Utility\WMB.h" />
     <ClInclude Include="Core\WMB.h" />
+    <ClInclude Include="globals.h" />
     <ClInclude Include="imconfig.h" />
     <ClInclude Include="imgui.h" />
     <ClInclude Include="imgui_impl_dx9.h" />

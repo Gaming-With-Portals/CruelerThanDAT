@@ -124,6 +124,26 @@ public:
         return buffer;
     }
 
+
+    template <typename T>
+    T ReadStruct() {
+        T out;
+        std::vector<char> raw = ReadBytes(sizeof(T));
+        std::memcpy(&out, raw.data(), sizeof(T));
+        return out;
+    }
+
+    template <typename T>
+    std::vector<T> ReadStructs(int count) {
+        std::vector<T> output;
+        for (int x = 0; x < count; x++) {
+            output.push_back(ReadStruct<T>());
+
+        }
+
+        return output;
+    }
+
     // Check if we are at the end of the data buffer
     bool EndOfBuffer() const {
         return offset >= data.size();
@@ -144,6 +164,8 @@ public:
     void SetEndianess(bool isBig) {
         isBigEndian = isBig;
     }
+
+
 
 private:
     std::vector<char>& data;
