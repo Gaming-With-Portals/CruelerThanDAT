@@ -21,6 +21,7 @@
 #include <format>
 #include "Utility/ImGuiExtended.h"
 #include "Utility/WMB.h"
+#include "Utility/CTDModel.h"
 #include <d3dx9.h>
 /**/
 
@@ -54,6 +55,9 @@ namespace HelperFunction {
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess = false, bool bigEndian = false);
 
 	int Align(int value, int alignment);
+
+
+	float HalfToFloat(uint16_t h);
 }
 
 enum FileNodeTypes {
@@ -190,7 +194,7 @@ public:
 
 
 
-			PopupOptionsEx();
+			//PopupOptionsEx();
 
 			ImGui::EndPopup();
 		}
@@ -872,6 +876,7 @@ public:
 	std::vector<CruelerMesh*> displayMeshes;
 
 	float rotationAngle = 0;;
+	float scaleFactor = 0.4f;
 
 	WmbFileNode(std::string fName) : FileNode(fName) {
 		fileIcon = ICON_CI_SYMBOL_METHOD;
@@ -926,61 +931,96 @@ public:
 			// vertex format lore
 			if (header.vertexFormat == 263){
 				reader.Seek(activeVtxGroup.offsetVertexes + activeBatch.vertexStart * sizeof(WMBVertexA));
-				D3DVERTEXELEMENT9 WMBVertexADecl[] = {
-					{ 0, offsetof(WMBVertexA, position), D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-					{ 0, offsetof(WMBVertexA, u), D3DDECLTYPE_SHORT4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-					{ 0, offsetof(WMBVertexA, normals), D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
-					{ 0, offsetof(WMBVertexA, tangents), D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
-					D3DDECL_END() // This marks the end of the vertex declaration
-				};
-				ctdmesh->structSize = sizeof(WMBVertexA);
-
-				IDirect3DVertexDeclaration9* vertexDecl;
-				g_pd3dDevice->CreateVertexDeclaration(WMBVertexADecl, &vertexDecl);
-				g_pd3dDevice->SetVertexDeclaration(vertexDecl);
+				ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
 				std::vector<WMBVertexA> vertexes = reader.ReadStructs<WMBVertexA>(activeBatch.numVertices);
 
-				g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(WMBVertexA),
+				std::vector<CUSTOMVERTEX> convertedVtx;
+				for (WMBVertexA &vertex : vertexes) {
+					CUSTOMVERTEX cvtx;
+					cvtx.x = vertex.position.x;
+					cvtx.y = vertex.position.y;
+					cvtx.z = vertex.position.z;
+					cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
+					cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
+					cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+					convertedVtx.push_back(cvtx);
+				}
+
+				g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(CUSTOMVERTEX),
 					0, 0,
 					D3DPOOL_DEFAULT, &ctdmesh->vertexBuffer, NULL);
 
 				void* pVertexData = nullptr;
 				HRESULT hr = ctdmesh->vertexBuffer->Lock(0, 0, &pVertexData, 0);
-				std::memcpy(pVertexData, vertexes.data(), activeBatch.numVertices * sizeof(WMBVertexA));
+				std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 				ctdmesh->vertexBuffer->Unlock();
-
+				g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 
 			}
 			else if (header.vertexFormat == 65847 || header.vertexFormat == 66359) {
 
 				reader.Seek(activeVtxGroup.offsetVertexes + activeBatch.vertexStart * sizeof(WMBVertex65847));
-				D3DVERTEXELEMENT9 WMBVertexADecl[] = {
-					{ 0, offsetof(WMBVertex65847, position),   D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-					{ 0, offsetof(WMBVertex65847, u),          D3DDECLTYPE_SHORT4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-					{ 0, offsetof(WMBVertex65847, normals),    D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
-					{ 0, offsetof(WMBVertex65847, tangents),   D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
-					{ 0, offsetof(WMBVertex65847, boneIndexes), D3DDECLTYPE_FLOAT1, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
-					{ 0, offsetof(WMBVertex65847, boneWeights), D3DDECLTYPE_FLOAT1, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
-					D3DDECL_END()
-				};
-				ctdmesh->structSize = sizeof(WMBVertex65847);
-				IDirect3DVertexDeclaration9* vertexDecl;
-				g_pd3dDevice->CreateVertexDeclaration(WMBVertexADecl, &vertexDecl);
-				g_pd3dDevice->SetVertexDeclaration(vertexDecl);
+
+				ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
 				std::vector<WMBVertex65847> vertexes = reader.ReadStructs<WMBVertex65847>(activeBatch.numVertices);
 
-				g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(WMBVertex65847),
+
+				std::vector<CUSTOMVERTEX> convertedVtx;
+				for (WMBVertex65847& vertex : vertexes) {
+					CUSTOMVERTEX cvtx;
+					cvtx.x = vertex.position.x;
+					cvtx.y = vertex.position.y;
+					cvtx.z = vertex.position.z;
+					cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
+					cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
+					cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+					convertedVtx.push_back(cvtx);
+				}
+
+				g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(CUSTOMVERTEX),
 					0, 0,
 					D3DPOOL_DEFAULT, &ctdmesh->vertexBuffer, NULL);
 
 				void* pVertexData = nullptr;
 				HRESULT hr = ctdmesh->vertexBuffer->Lock(0, 0, &pVertexData, 0);
-				std::memcpy(pVertexData, vertexes.data(), activeBatch.numVertices * sizeof(WMBVertex65847));
+				std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 				ctdmesh->vertexBuffer->Unlock();
+				g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 			}
+			else if (header.vertexFormat == 66311) {
 
+				reader.Seek(activeVtxGroup.offsetVertexes + activeBatch.vertexStart * sizeof(WMBVertex66311));
+				ctdmesh->structSize = sizeof(CUSTOMVERTEX);
+
+
+				std::vector<WMBVertex66311> vertexes = reader.ReadStructs<WMBVertex66311>(activeBatch.numVertices);
+
+				std::vector<CUSTOMVERTEX> convertedVtx;
+				for (WMBVertex66311& vertex : vertexes) {
+					CUSTOMVERTEX cvtx;
+					cvtx.x = vertex.position.x;
+					cvtx.y = vertex.position.y;
+					cvtx.z = vertex.position.z;
+					cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
+					cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
+					cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+					convertedVtx.push_back(cvtx);
+				}
+
+				g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(CUSTOMVERTEX),
+					0, 0,
+					D3DPOOL_DEFAULT, &ctdmesh->vertexBuffer, NULL);
+
+				void* pVertexData = nullptr;
+				HRESULT hr = ctdmesh->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+				std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
+				ctdmesh->vertexBuffer->Unlock();
+				g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
+
+
+			}
 
 
 			displayMeshes.push_back(ctdmesh);
@@ -998,29 +1038,6 @@ public:
 			if (mesh->visibility) {
 				g_pd3dDevice->SetIndices(mesh->indexBuffer);
 				g_pd3dDevice->SetStreamSource(0, mesh->vertexBuffer, 0, mesh->structSize);
-
-				D3DXMATRIX matWorld, matView, matProj, matScale, matRotate, matWVP;
-
-
-				D3DXMatrixIdentity(&matView);
-				D3DXMatrixIdentity(&matProj);
-
-				// Rotate the mesh
-				D3DXMatrixRotationY(&matRotate, rotationAngle);
-				float scaleFactor = 0.4f;
-
-				D3DXMatrixScaling(&matScale, scaleFactor, scaleFactor, scaleFactor);
-				matWorld =  matScale * matRotate;
-				// Final WVP matrix
-				matWVP = matWorld * matView * matProj;
-
-
-				// Send it to the shader
-
-				g_pd3dDevice->SetVertexShader(pSolidShaderVTX);
-				g_pd3dDevice->SetPixelShader(pSolidShaderPX);
-
-				g_pd3dDevice->SetVertexShaderConstantF(0, (float*)&matWVP, 4);
 
 				g_pd3dDevice->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, mesh->vertexCount, 0, mesh->indexCount / 3);
 			}
@@ -1046,6 +1063,68 @@ public:
 		}
 	}
 
+};
+
+struct SCRMesh {
+	unsigned int offset;
+	char name[32];
+	WMBVector position;
+
+};
+
+
+class ScrFileNode : public FileNode {
+public:
+
+	ScrFileNode(std::string fName) : FileNode(fName) {
+		fileIcon = ICON_CI_RECORD;
+		TextColor = { 1.0f, 0.0f, 0.376f, 1.0f };
+		nodeType = MOT;
+		fileFilter = L"Platinum Stage File(*.scr)\0*.scr;\0";
+	}
+	void LoadFile() override {
+		BinaryReader reader(fileData, true);
+		reader.SetEndianess(fileIsBigEndian);
+
+		reader.Seek(0x6);
+		
+		int modelCount = reader.ReadUINT16();
+		int offsetModelDef = reader.ReadUINT32();
+
+		reader.Seek(offsetModelDef);
+		std::vector<unsigned int> meshOffsets;
+		
+		for (int i = 0; i < modelCount; i++) {
+			meshOffsets.push_back(reader.ReadUINT32());
+		}
+
+		std::vector<SCRMesh> meshes;
+		for (int offset : meshOffsets) {
+			reader.Seek(offset);
+			SCRMesh mesh = reader.ReadStruct<SCRMesh>();
+			meshes.push_back(mesh);
+		}
+		for (int i = 0; i < modelCount; i++) {
+			reader.Seek(meshes[i].offset);
+			int size = 0;
+			if (i != meshes.size() - 1) {
+				size = meshes[i + 1].offset - meshes[i].offset;
+			}
+			else {
+				size = fileData.size() - meshes[i].offset;
+			}
+			
+			WmbFileNode* node = new WmbFileNode(std::string(meshes[i].name));
+			node->fileIsBigEndian = fileIsBigEndian;
+			node->SetFileData(reader.ReadBytes(size));
+			node->LoadFile();
+			children.push_back(node);
+		}
+
+	}
+	void SaveFile() override {
+
+	}
 };
 
 class BnkFileNode : public FileNode {

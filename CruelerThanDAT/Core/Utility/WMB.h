@@ -1,5 +1,7 @@
 ﻿#pragma once
 #include <cstdint>
+
+
 #pragma pack(push, 1)
 
 struct WMBVector {
@@ -8,22 +10,35 @@ struct WMBVector {
     float z;
 };
 
+struct WMBUV {
+    uint16_t u;
+    uint16_t v;
+};
+
 struct WMBVertexA {
     WMBVector position; // 3 floats
-    uint16_t u; // Half Float
-    uint16_t v; // Half Float
+    WMBUV uv;
     uint32_t normals; // TODO: Deal with
     uint32_t tangents; // TODO: Ignore
 };
 
 struct WMBVertex65847 {
     WMBVector position; // 3 floats
-    uint16_t u; // Half Float
-    uint16_t v; // Half Float
+    WMBUV uv;
     uint32_t normals; // TODO: Deal with
     uint32_t tangents; // TODO: Ignore
     float  boneIndexes;
     float  boneWeights;
+};
+
+struct WMBVertex66311 {
+    WMBVector position; // 3 floats
+    WMBUV uv;
+    uint32_t normals; // TODO: Deal with
+    uint32_t tangents; // TODO: Ignore
+    char color[4];
+    WMBUV uv2;
+    
 };
 
 struct WMBBatch {

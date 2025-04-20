@@ -3,6 +3,8 @@
 #include <DirectXMath.h>
 
 namespace CruelerThanDAT {
+
+
 	struct WMBHeader {
 		char id[4];
 		uint32_t u_a;

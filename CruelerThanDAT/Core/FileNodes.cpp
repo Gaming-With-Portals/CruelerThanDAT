@@ -3,6 +3,7 @@
 FileNode* FileNode::selectedNode = nullptr;
 
 void closeNode(FileNode* target) {
+	FileNode::selectedNode = nullptr;
     auto it = std::find(openFiles.begin(), openFiles.end(), target);
     if (it != openFiles.end()) { // Ensure it exists before erasing
         openFiles.erase(it);
@@ -23,4 +24,45 @@ int IntLength(int value) {
 
 int HelperFunction::Align(int value, int alignment) {
 	return (value + (alignment - 1)) & ~(alignment - 1);
+}
+
+float HelperFunction::HalfToFloat(uint16_t h) {
+	uint16_t h_exp = (h & 0x7C00) >> 10;  // exponent
+	uint16_t h_sig = h & 0x03FF;          // significand
+	uint32_t f_sgn = (h & 0x8000) << 16;  // sign bit
+
+	uint32_t f_exp, f_sig;
+
+	if (h_exp == 0) {
+		// Zero / Subnormal
+		if (h_sig == 0) {
+			f_exp = 0;
+			f_sig = 0;
+		}
+		else {
+			// Normalize it
+			h_exp = 1;
+			while ((h_sig & 0x0400) == 0) {
+				h_sig <<= 1;
+				h_exp--;
+			}
+			h_sig &= 0x03FF;
+			f_exp = (127 - 15 + h_exp) << 23;
+			f_sig = h_sig << 13;
+		}
+	}
+	else if (h_exp == 0x1F) {
+		// Inf / NaN
+		f_exp = 0xFF << 23;
+		f_sig = h_sig << 13;
+	}
+	else {
+		f_exp = (h_exp - 15 + 127) << 23;
+		f_sig = h_sig << 13;
+	}
+
+	uint32_t f = f_sgn | f_exp | f_sig;
+	float result;
+	std::memcpy(&result, &f, sizeof(result));
+	return result;
 }

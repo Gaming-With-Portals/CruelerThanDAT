@@ -13,7 +13,7 @@ const char* solidColorVTX = R"(
     
     VS_OUTPUT main(VS_INPUT input) {
         VS_OUTPUT output;
-        output.position = mul(float4(input.position, 1.0), WorldViewProj);
+        output.position = float4(input.position, 1.0);
         output.color = float4(abs(input.position.x), abs(input.position.z), abs(input.position.y), 1.0f);
         return output;
     }

@@ -157,6 +157,7 @@
     <ClInclude Include="Core\Log.h" />
     <ClInclude Include="Core\Utility\BasicShaders.h" />
     <ClInclude Include="Core\Utility\CRC32.h" />
+    <ClInclude Include="Core\Utility\CTDModel.h" />
     <ClInclude Include="Core\Utility\FileUtils.h" />
     <ClInclude Include="Core\Utility\HashDataContainer.h" />
     <ClInclude Include="Core\Utility\ImGuiExtended.h" />

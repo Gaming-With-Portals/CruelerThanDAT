@@ -37,6 +37,8 @@ static D3DXMATRIX projMatrix;
 
 bool showViewport = true;
 std::vector<FileNode*> openFiles;
+std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
+
 ThemeManager* themeManager;
 
 bool cruelerLog = true;
@@ -67,6 +69,14 @@ namespace HelperFunction {
         }
         else if (fileType == 876760407) {
             outputFile = new WmbFileNode(fileName);
+            if (forceEndianess) {
+                outputFile->fileIsBigEndian = bigEndian;
+            }
+            outputFile->SetFileData(data);
+            outputFile->LoadFile();
+        }
+        else if (fileType == 5391187) {
+            outputFile = new ScrFileNode(fileName);
             if (forceEndianess) {
                 outputFile->fileIsBigEndian = bigEndian;
             }
@@ -250,6 +260,9 @@ void ResetDevice()
 
 
 void RenderFrame() {
+    static float fov = 45.0f;
+    static float index = 90.0f;    // an ever-increasing float value
+    static float cameraPos[3] = { 0.0f, 0.0f, 100.0f };
 
     // Start the ImGui frame
     ImGui_ImplDX9_NewFrame();
@@ -373,16 +386,38 @@ void RenderFrame() {
         else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
             showViewport = false;
             WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
+            
+            if (ImGui::BeginTabBar("wmb_editor")) {
+                if (ImGui::BeginTabItem("Meshes")) {
+                    wmbNode->RenderGUI();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Camera")) {
+                    ImGui::SetNextItemWidth(120.0f);
+                    ImGui::SliderFloat("FOV", &fov, 20.0f, 100.0f);
+                    ImGui::SetNextItemWidth(120.0f);
+                    ImGui::SliderFloat("Rotation", &index, 0.0f, 360.0f);
+                    ImGui::SliderFloat3("Position", cameraPos, -200.0f, 200.0f);
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Materials")) {
 
-            wmbNode->RenderGUI();
+
+                    ImGui::EndTabItem();
+                }
+
+
+                ImGui::EndTabBar();
+            }
+
+
+
         }
 
 	}
 
 
     ImGui::End();
-    
-
 
 
     
@@ -434,19 +469,58 @@ void RenderFrame() {
     ImGui::End();
     
 
+    D3DXMATRIX matRotateY;    // a matrix to store the rotation information
+
+
+    // build a matrix to rotate the model based on the increasing float value
+    D3DXMatrixRotationY(&matRotateY, D3DXToRadian(index));
+
+    // tell Direct3D about our matrix
+    g_pd3dDevice->SetTransform(D3DTS_WORLD, &matRotateY);
+
+    D3DXMATRIX matView;    // the view transform matrix
+
+    D3DXVECTOR3 eyePos(cameraPos[0], cameraPos[1], cameraPos[2]);
+    D3DXVECTOR3 lookAt(0.0f, 0.0f, 0.0f);
+    D3DXVECTOR3 upDir(0.0f, 1.0f, 0.0f);
+
+    D3DXMatrixLookAtLH(&matView, &eyePos, &lookAt, &upDir);
+
+    g_pd3dDevice->SetTransform(D3DTS_VIEW, &matView);    // set the view transform to matView
+
+    D3DXMATRIX matProjection;     // the projection transform matrix
+
+    D3DXMatrixPerspectiveFovLH(&matProjection,
+        D3DXToRadian(fov),    // the horizontal field of view
+        (FLOAT)1280 / (FLOAT)720, // aspect ratio
+        1.0f,    // the near view-plane
+        10000.0f);    // the far view-plane
+
+    g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &matProjection);
+
+
+
 
     ImGui::EndFrame();
-    g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
-    g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
     g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
     D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
     g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
+    g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
     if (g_pd3dDevice->BeginScene() >= 0)
     {
+        g_pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);  // unless you're using normals and lights
+        g_pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE); // disable backface culling for now
+        g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, TRUE);
+
         if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
             WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
+            g_pd3dDevice->SetTexture(0, textureMap[0]);
             wmbNode->RenderMesh();
         }
+
+        g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
+        g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+
 
         ImGui::Render();
         ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
@@ -523,6 +597,17 @@ int main()
 
     CTDLog::Log::getInstance().LogNote("CruelerThanDAT Ready");
     themeManager->ChooseStyle(1);
+
+    LPDIRECT3DTEXTURE9 pTexture;
+    HRESULT hr = D3DXCreateTextureFromFile(g_pd3dDevice, L"Assets/img.dds", &pTexture);
+
+    if (FAILED(hr)) {
+        MessageBox(0, L"Failed to load texture!", L"Error", MB_OK);
+        
+    }
+
+    textureMap[0] = pTexture;
+
     bool done = false;
     while (!done)
     {
