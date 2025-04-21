@@ -165,7 +165,6 @@
     <ClInclude Include="Core\Utility\HashDataContainer.h" />
     <ClInclude Include="Core\Utility\ImGuiExtended.h" />
     <ClInclude Include="Core\Utility\WMB.h" />
-    <ClInclude Include="Core\WMB.h" />
     <ClInclude Include="globals.h" />
     <ClInclude Include="imconfig.h" />
     <ClInclude Include="imgui.h" />

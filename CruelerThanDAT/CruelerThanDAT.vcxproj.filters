@@ -86,9 +86,6 @@
     <ClInclude Include="Core\Log.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Core\WMB.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Core\Utility\CRC32.h">
       <Filter>Header Files</Filter>
     </ClInclude>
