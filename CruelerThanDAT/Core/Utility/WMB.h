@@ -1,8 +1,20 @@
 ﻿#pragma once
 #include <cstdint>
+#include <map>
+
+
 
 
 #pragma pack(push, 1)
+
+struct CTDMaterial {
+    std::string shader_name;
+    std::map<unsigned int, unsigned int> texture_data;
+    
+    
+
+};
+
 
 struct WMBVector {
     float x;
@@ -41,6 +53,15 @@ struct WMBVertex66311 {
     
 };
 
+struct WMBVertex65799 {
+    WMBVector position; // 3 floats
+    WMBUV uv;
+    uint32_t normals; // TODO: Deal with
+    uint32_t tangents; // TODO: Ignore
+    char color[4];
+
+};
+
 struct WMBBatch {
     uint32_t vertexGroupIndex;
     int32_t vertexStart;
@@ -52,7 +73,7 @@ struct WMBBatch {
 struct WMBBatchData {
     uint32_t batchIndex;
     uint32_t meshIndex;
-    uint32_t materialIndex;
+    uint16_t materialIndex;
     uint16_t boneSetsIndex;
     uint32_t u_a;
 };
@@ -71,14 +92,14 @@ struct WMBMaterial {
     uint32_t offsetTextures;
     uint32_t u_a;
     uint32_t offsetParameters;
+    uint16_t u_b;
     uint16_t numTextures;
-    uint16_t u_c;
     uint16_t u_d;
     uint16_t numParameters;
 };
 
 struct WMBTexture {
-    uint32_t flags;
+    uint32_t flag;
     uint32_t id;
 };
 

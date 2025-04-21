@@ -123,4 +123,7 @@
   <ItemGroup>
     <Font Include="Assets\codicon.ttf" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="Assets\img.dds" />
+  </ItemGroup>
 </Project>

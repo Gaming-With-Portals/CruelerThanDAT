@@ -135,6 +135,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)Assets" "$(OutDir)Assets" /E /I /Y</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Assets\CodIcons.h" />
@@ -178,6 +181,12 @@
     <Font Include="Assets\codicon.ttf">
       <DeploymentContent>true</DeploymentContent>
     </Font>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Assets\img.dds">
+      <DeploymentContent>false</DeploymentContent>
+      <FileType>Image</FileType>
+    </Image>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
