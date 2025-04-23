@@ -902,6 +902,10 @@ public:
 		BinaryReader reader(fileData, true);
 		reader.SetEndianess(fileIsBigEndian);
 
+		if (fileIsBigEndian) {
+			return;
+		}
+
 		WMBHeader header = WMBHeader();
 		header = reader.ReadStruct<WMBHeader>();
 
@@ -1013,7 +1017,7 @@ public:
 					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 
 				}
-				else if (header.vertexFormat == 65847 || header.vertexFormat == 66359) {
+				else if (header.vertexFormat == 65847 || header.vertexFormat == 66359 || header.vertexFormat == 311) {
 
 					reader.Seek(activeVtxGroup.offsetVertexes + activeBatch.vertexStart * sizeof(WMBVertex65847));
 

@@ -76,12 +76,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>F:\Dev\Microsoft DirectX SDK (June 2010)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>F:\Dev\Microsoft DirectX SDK (June 2010)\Include;C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies);libcurl_a.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9d.lib;%(AdditionalDependencies);C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel-obj-lib\libcurl_a.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel\lib</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -92,14 +93,15 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>F:\Dev\Microsoft DirectX SDK (June 2010)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>F:\Dev\Microsoft DirectX SDK (June 2010)\Include;C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies);libcurl.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9d.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel\lib</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -109,12 +111,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>F:\Dev\Microsoft DirectX SDK (June 2010)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\Dev\Microsoft DirectX SDK (June 2010)\Include;C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies);libcurl.lib;urlmon.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;E:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;E:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9d.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel\lib</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -125,7 +128,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>F:\Dev\Microsoft DirectX SDK (June 2010)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\Dev\Microsoft DirectX SDK (June 2010)\Include;C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -133,7 +136,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;F:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies);libcurl.lib;urlmon.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;E:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3d9.lib;E:\Dev\Microsoft DirectX SDK (June 2010)\Lib\x64\d3dx9.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\cashc\Documents\curl\builds\libcurl-vc17-x64-release-static-ipv6-sspi-schannel\lib</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>xcopy "$(ProjectDir)Assets" "$(OutDir)Assets" /E /I /Y</Command>
@@ -174,6 +178,8 @@
     <ClInclude Include="imstb_rectpack.h" />
     <ClInclude Include="imstb_textedit.h" />
     <ClInclude Include="imstb_truetype.h" />
+    <ClInclude Include="json.hpp" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="Themes\themeLoader.h" />
   </ItemGroup>
   <ItemGroup>
@@ -182,10 +188,18 @@
     </Font>
   </ItemGroup>
   <ItemGroup>
+    <Image Include="..\..\..\Downloads\CruelerThanDAT.png" />
     <Image Include="Assets\img.dds">
       <DeploymentContent>false</DeploymentContent>
       <FileType>Image</FileType>
     </Image>
+    <Image Include="icon1.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="CruelerThanDAT.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

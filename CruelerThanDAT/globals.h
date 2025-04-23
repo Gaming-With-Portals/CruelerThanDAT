@@ -2,6 +2,8 @@
 #include <d3d9.h>
 #include "unordered_map"
 
+static bool SHOULD_UPDATE = false;
+static int BUILD_NUMBER = 2;
 extern LPDIRECT3DDEVICE9 g_pd3dDevice;
 extern LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX;
 extern LPDIRECT3DPIXELSHADER9 pSolidShaderPX;

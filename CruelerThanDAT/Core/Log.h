@@ -60,5 +60,9 @@ namespace CTDLog {
             logEntries.push_back(new LogEntry(std::string(ICON_CI_ERROR) + GetTime() + text, { 1, 0, 0.329f, 1 }));
         }
 
+        void LogUpdate() {
+            logEntries.push_back(new LogEntry("update", { 0, 1, 0, 1 }));
+        }
+
     };
 }

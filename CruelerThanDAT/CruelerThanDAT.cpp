@@ -1,6 +1,6 @@
-// CruelerThanDAT.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
 #define NOMINMAX
+#define CURL_STATICLIB
+
 #include <Windows.h>
 #include <d3d9.h>
 #include <d3dx9.h>
@@ -21,6 +21,8 @@
 #include "Core/Utility/BasicShaders.h"
 #include "Core/Utility/FileUtils.h"
 #include "Core/CTDSettings.h"
+#include "curl/curl.h"
+#include "json.hpp"
 
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 int TEXTURE_CAP = 512;
@@ -41,8 +43,10 @@ static D3DXMATRIX projMatrix;
 
 static CTDSettings appConfig;
 
+bool hasHandledArguments = false;
 bool showViewport = true;
 std::vector<FileNode*> openFiles;
+std::string downloadURL = "";
 static std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
 
 ThemeManager* themeManager;
@@ -247,6 +251,7 @@ void PopulateTextures() {
                         // We have all the data, it's time to lock the fuck in
                         BinaryReader wta = BinaryReader(wtaFile->fileData);
                         BinaryReader wtp = BinaryReader(wtpFile->fileData);
+                        wta.SetEndianess(node->fileIsBigEndian);
 
                         DX9WTAWTPLoad(wta, wtp);
 
@@ -257,6 +262,7 @@ void PopulateTextures() {
                 else if (dtnode->fileExtension == "wtb") {
                     BinaryReader wta = BinaryReader(dtnode->fileData);
                     BinaryReader wtp = BinaryReader(dtnode->fileData);
+                    wta.SetEndianess(node->fileIsBigEndian);
 
                     DX9WTAWTPLoad(wta, wtp);
                 }
@@ -270,6 +276,46 @@ void PopulateTextures() {
 
     }
 
+}
+
+
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+void SelfUpdate() {
+    CURL* curl = curl_easy_init();
+    std::string response;
+
+    if (curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, "https://api.github.com/repos/Gaming-With-Portals/CruelerThanDAT/releases/latest");
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "CruelerThanDAT");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+    }
+    nlohmann::json data = nlohmann::json::parse(response);
+    std::string tag = data["tag_name"];
+    size_t underscorePos = tag.rfind('_');
+    if (underscorePos != std::string::npos) {
+        std::string numberPart = tag.substr(underscorePos + 1);
+        int newBuild = std::stoi(numberPart);
+        if (newBuild > BUILD_NUMBER) {
+            CTDLog::Log::getInstance().LogUpdate();
+            downloadURL = data["assets"][0]["browser_download_url"];
+            if (downloadURL != "") {
+                SHOULD_UPDATE = true;
+            }
+            
+        }
+        
+
+    }
+
+
+    
 }
 
 
@@ -379,6 +425,7 @@ void RenderFrame() {
     static float fov = 20.0f;
     static float index = 180.0f;    // an ever-increasing float value
     static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
+    static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
     static bool spinModel = false;
 
     // Start the ImGui frame
@@ -391,8 +438,19 @@ void RenderFrame() {
 
     ImGui::Begin("TabCtrl", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
     
-    ImGui::Text("Textures Loaded: %d/%d", textureMap.size(), TEXTURE_CAP);
+    if (SHOULD_UPDATE) {
+        
+        if (ImGui::Button("Update")) {
+            SHOULD_UPDATE = false;
+            URLDownloadToFileA(NULL, downloadURL.c_str(), "update.zip", NULL, NULL);
+            ShellExecute(NULL, L"open", L"update.bat", NULL, NULL, SW_SHOWNORMAL);
+            exit(0);
 
+        }
+        ImGui::SameLine();
+    }
+
+    ImGui::Text("Textures Loaded: %d/%d", textureMap.size(), TEXTURE_CAP);
 
 
     ImGui::End();
@@ -565,9 +623,14 @@ void RenderFrame() {
                     ImGui::SliderFloat("Rotation", &index, 0.0f, 360.0f);
                     ImGui::Checkbox("Spin Model?", &spinModel);
 
+                    ImGui::SetNextItemWidth(120.0f);
+                    ImGui::DragFloat("Orbit Height", &cameraPos[1], 0.1f);
+                    ImGui::SetNextItemWidth(120.0f);
+                    ImGui::DragFloat("Orbit Distance", &cameraPos[2], 0.1f);
                     ImGui::SetNextItemWidth(240.0f);
-                    ImGui::SliderFloat3("Position", cameraPos, -800.0f, 800.0f);
+                    ImGui::DragFloat3("Camera Position", cameraVec, 0.1f);
                     ImGui::EndTabItem();
+
                 }
 
                 ImGui::EndTabBar();
@@ -605,7 +668,14 @@ void RenderFrame() {
 
 
         for (CTDLog::LogEntry* log : CTDLog::Log::getInstance().logEntries) {
-            ImGui::TextColored(log->color, log->text.c_str());
+            if (log->text == "update") {
+                ImGui::TextColored(log->color, (std::string(ICON_CI_DESKTOP_DOWNLOAD) + " CruelerThanDAT is ready to update! An update button has appeared in the top bar").c_str());
+
+            }
+            else {
+                ImGui::TextColored(log->color, log->text.c_str());
+            }
+            
         }
 
         ImGui::PopStyleColor(4);
@@ -649,8 +719,8 @@ void RenderFrame() {
 
     D3DXMATRIX matView;    // the view transform matrix
 
-    D3DXVECTOR3 eyePos(cameraPos[0], cameraPos[1], cameraPos[2]);
-    D3DXVECTOR3 lookAt(0.0f, 0.0f, 0.0f);
+    D3DXVECTOR3 eyePos(cameraPos[0] + cameraVec[0], cameraPos[1] + cameraVec[1], cameraPos[2] + cameraVec[2]);
+    D3DXVECTOR3 lookAt(cameraVec[0], cameraVec[1], cameraVec[2]);
     D3DXVECTOR3 upDir(0.0f, 1.0f, 0.0f);
 
     D3DXMatrixLookAtLH(&matView, &eyePos, &lookAt, &upDir);
@@ -721,10 +791,38 @@ void RenderFrame() {
 
 
 
-int main()
+int main(int argc, char* argv[])
 {
+    printf("-- CruelerThanDAT --\n");
 
+    printf("Setting working directory...\n");
+    char exePath[MAX_PATH];
+    GetModuleFileNameA(NULL, exePath, MAX_PATH);
 
+    // Strip off the executable name to get the directory
+    std::string path(exePath);
+    size_t lastSlash = path.find_last_of("\\/");
+    if (lastSlash != std::string::npos) {
+        path = path.substr(0, lastSlash);
+        SetCurrentDirectoryA(path.c_str());
+    }
+
+    if (!std::filesystem::exists("Assets")) {
+        printf("Assets are missing or corrupt. (Case 0)");
+        std::cin;
+    }
+    else if (!std::filesystem::exists("Assets/img.dds")) {
+        printf("Assets are missing or corrupt. (Case 1)");
+        std::cin;
+    }
+    else if (!std::filesystem::exists("Assets/Themes")) {
+        printf("Themes are missing or corrupt. (Case 0)");
+        std::cin;
+    }
+    else if (!std::filesystem::exists("Assets/Model")) {
+        printf("DirectX Data is missing or corrupt. (Case 0)");
+        std::cin;
+    }
 
     themeManager = new ThemeManager();
     themeManager->UpdateThemeList();
@@ -732,11 +830,16 @@ int main()
 
     appConfig.Read();
 
+
+
+
     printf("D3DInit...");
+    CTDLog::Log::getInstance().LogNote("Launching CruelerThanDAT...");
+    CTDLog::Log::getInstance().LogNote("Waiting for DirectX9...");
 
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"CruelerThanDAT (DirectX 9)", WS_OVERLAPPEDWINDOW, 100, 100, 1600, 900, nullptr, nullptr, wc.hInstance, nullptr);
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"CruelerThanDAT", WS_OVERLAPPEDWINDOW, 100, 100, 1600, 900, nullptr, nullptr, wc.hInstance, nullptr);
 
 
     // Initialize Direct3D
@@ -785,7 +888,7 @@ int main()
 #endif
 
 
-    CTDLog::Log::getInstance().LogNote("CruelerThanDAT Ready");
+    
     themeManager->ChooseStyle(1);
 
     LPDIRECT3DTEXTURE9 pTexture;
@@ -805,6 +908,9 @@ int main()
 
     ::ShowWindow(::GetConsoleWindow(), SW_HIDE);
 
+    CTDLog::Log::getInstance().LogNote("CruelerThanDAT Ready");
+
+    SelfUpdate();
 
     bool done = false;
     while (!done)
@@ -842,6 +948,16 @@ int main()
         }
 
         RenderFrame();
+
+        if (!hasHandledArguments) {
+            for (int i = 1; i < argc; ++i) {
+                if (std::filesystem::exists(argv[i])) {
+                    openFiles.push_back(FileNodeFromFilepath(argv[i]));
+
+                }
+            }
+            hasHandledArguments = true;
+        }
 
     }
 

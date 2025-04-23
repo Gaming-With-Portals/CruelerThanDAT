@@ -116,11 +116,31 @@
     <ClInclude Include="Core\Utility\CTDModel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="json.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Font Include="Assets\codicon.ttf" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\img.dds" />
+    <Image Include="..\..\..\Downloads\CruelerThanDAT.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="icon1.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="CruelerThanDAT.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>
