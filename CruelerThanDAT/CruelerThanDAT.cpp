@@ -48,6 +48,7 @@ bool showViewport = true;
 std::vector<FileNode*> openFiles;
 std::string downloadURL = "";
 static std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
+static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 
 ThemeManager* themeManager;
 
@@ -59,6 +60,13 @@ namespace HelperFunction {
         std::string fileExtension = fileName.substr(fileName.find_last_of("."));
         uint32_t fileType = 0;
         FileNode* outputFile = nullptr;
+
+        // fix extension compare
+        size_t nullPos = fileExtension.find('\0');
+        if (nullPos != std::string::npos) {
+            fileExtension = fileExtension.substr(0, nullPos);
+        }
+
         if (data.size() >= 4) {
             fileType = *reinterpret_cast<const uint32_t*>(&data[0]);
         }
@@ -66,7 +74,15 @@ namespace HelperFunction {
 
 
         // TODO: DAT files smaller than 4 bytes (empty) aren't recognized as DAT files
-        if (fileType == 5521732) {
+        if (fileExtension == ".uid") {
+            outputFile = new UidFileNode(fileName);
+            if (forceEndianess) {
+                outputFile->fileIsBigEndian = bigEndian;
+            }
+            outputFile->SetFileData(data);
+            outputFile->LoadFile();
+        }
+        else if (fileType == 5521732) {
             outputFile = new DatFileNode(fileName);
             if (forceEndianess) {
                 outputFile->fileIsBigEndian = bigEndian;
@@ -225,7 +241,7 @@ void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
         std::vector<char> data = WTP.ReadBytes(sizes[i]);
         LPCVOID ptr = static_cast<LPCVOID>(data.data());
         D3DXCreateTextureFromFileInMemory(g_pd3dDevice, ptr, sizes[i], &tmpTexture);
-
+        rawTextureInfo[idx[i]] = data;
         textureMap[idx[i]] = tmpTexture;
     }
 
@@ -543,7 +559,7 @@ void RenderFrame() {
             showViewport = true;
 			ImGui::Text("- Binary XML");
 			BxmFileNode* bxmNode = ((BxmFileNode*)FileNode::selectedNode);
-			bxmNode->RenderXMLTree(bxmNode->baseNode);
+			bxmNode->RenderGUI();
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WTB) {
             showViewport = true;
@@ -564,6 +580,11 @@ void RenderFrame() {
             LY2FileNode* ly2Node = ((LY2FileNode*)FileNode::selectedNode);
             ly2Node->RenderGUI();
         }
+        else if (FileNode::selectedNode->nodeType == FileNodeTypes::UID) {
+            UidFileNode* uidNode = ((UidFileNode*)FileNode::selectedNode);
+            uidNode->RenderGUI();
+        }
+
         else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
             showViewport = false;
             WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);

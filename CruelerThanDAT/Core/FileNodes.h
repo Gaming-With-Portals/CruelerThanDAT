@@ -22,7 +22,11 @@
 #include "Utility/ImGuiExtended.h"
 #include "Utility/WMB.h"
 #include "Utility/CTDModel.h"
+#include "Utility/UID.h"
 #include <d3dx9.h>
+#include <chrono>
+#include "fbxsdk.h"
+
 /**/
 
 
@@ -35,6 +39,19 @@ extern std::vector<FileNode*> openFiles;
 
 
 namespace BXMInternal {
+	static const std::vector<std::string> possibleParams = {
+	"RoomNo",
+	"PlayerPos",
+	"isRestartPoint",
+	"CameraYaw",
+	"CameraEnable",
+	"CameraXEnable",
+	"CameraYEnable",
+	"isPlWaitPayment"
+	};
+
+	std::vector<std::string> SplitString(const std::string& str, char delimiter);
+
 	struct XMLAttribute {
 		std::string value = "";
 		std::string name = "";
@@ -45,7 +62,7 @@ namespace BXMInternal {
 		std::string value = "";
 		std::vector<XMLNode*> childNodes;
 		std::vector<XMLAttribute*> childAttributes;
-		
+
 	};
 
 }
@@ -58,6 +75,8 @@ namespace HelperFunction {
 
 
 	float HalfToFloat(uint16_t h);
+
+	bool WriteVectorToFile(const std::vector<char> dataVec, const std::string& filename);
 }
 
 enum FileNodeTypes {
@@ -70,7 +89,8 @@ enum FileNodeTypes {
 	BNK,
 	DAT,
 	WTB,
-	LY2
+	LY2,
+	UID
 };
 
 int IntLength(int);
@@ -128,7 +148,7 @@ public:
 				SaveFile();
 				outputFile.write(fileData.data(), fileData.size());
 			}
-			
+
 		}
 		else {
 			std::cout << "Save operation cancelled." << std::endl;
@@ -163,7 +183,8 @@ public:
 				file.read(fileData.data(), size); // Read data
 				file.close();
 				std::cout << "Replaced file! " << std::endl;
-			} else {
+			}
+			else {
 				std::cout << "Error" << std::endl;
 			}
 
@@ -200,10 +221,10 @@ public:
 		}
 	}
 
-	
+
 	virtual void Render() {
 		std::string displayName = fileIcon + fileName;
-		
+
 
 
 		if (fileIsBigEndian) {
@@ -218,9 +239,9 @@ public:
 				if (ImGui::IsItemClicked()) {
 					selectedNode = this; // Update selected node
 				}
-				
 
-				
+
+
 				ImGui::TreePop();
 			}
 			ImGui::PopStyleColor();
@@ -248,7 +269,7 @@ public:
 				ImGui::PopStyleColor();
 			}
 		}
-		
+
 	}
 
 	virtual void LoadFile() = 0;
@@ -317,7 +338,7 @@ public:
 	std::vector<LY2ExData> extradata;
 
 	char input_id[7];
-	
+
 
 	LY2FileNode(std::string fName) : FileNode(fName) {
 		fileIcon = ICON_CI_ARRAY;
@@ -337,7 +358,7 @@ public:
 		propTypeCount = reader.ReadUINT32();
 		mysteryPointer = reader.ReadUINT32();
 		mysteryCount = reader.ReadUINT32();
-		
+
 		for (int x = 0; x < propTypeCount; x++) {
 			LY2Node node = LY2Node();
 			node.flag_a = reader.ReadUINT32();
@@ -356,7 +377,7 @@ public:
 				instance.pos[2] = reader.ReadFloat();
 				instance.scale[0] = reader.ReadFloat();
 				instance.scale[1] = reader.ReadFloat();
-				instance.scale[2] = reader.ReadFloat(); 
+				instance.scale[2] = reader.ReadFloat();
 				instance.unknownB4C = reader.ReadUINT32();
 				instance.unknownB4E = reader.ReadUINT32();
 				instance.unknownB4F = reader.ReadUINT32();
@@ -364,7 +385,7 @@ public:
 
 				node.instances.push_back(instance);
 
-				
+
 			}
 			nodes.push_back(node);
 			reader.Seek(pos);
@@ -433,7 +454,7 @@ public:
 			writer->WriteUINT32(exData.c);
 			writer->WriteUINT32(exData.d);
 		}
-		
+
 		fileData = writer->GetData();
 	}
 
@@ -499,7 +520,7 @@ public:
 					ImGui::PopID();
 					i += 1;
 				}
-				
+
 				if (ImGui::Button("Optimize Groups")) {
 					// Basically, every group with equal IDs and flags can be combined into one.
 					for (size_t i = 0; i < nodes.size(); ++i) {
@@ -513,7 +534,7 @@ public:
 
 								nodes[i].instances.insert(nodes[i].instances.end(), nodes[j].instances.begin(), nodes[j].instances.end());
 
-								nodes[j].instances.clear(); 
+								nodes[j].instances.clear();
 							}
 						}
 					}
@@ -533,7 +554,231 @@ public:
 
 };
 
+class UidFileNode : public FileNode {
+public:
+	UIDHeader uidHeader;
+	std::vector<UIDEntry1> UIDEntry1List;
+	std::vector<UIDEntry2> UIDEntry2List;
+	std::vector<UIDEntry3> UIDEntry3List;
 
+	bool UIDVisualize = false;
+	UidFileNode(std::string fName) : FileNode(fName) {
+		fileIcon = ICON_CI_EDITOR_LAYOUT;
+		TextColor = { 1.0f, 0.0f, 0.376f, 1.0f };
+		nodeType = UID;
+		fileFilter = L"User Interface Description(*.uid)\0*.uid;\0";
+	}
+	void LoadFile() override {
+		BinaryReader reader(fileData, fileIsBigEndian);
+
+		uidHeader.Read(reader);
+
+		if (uidHeader.offset1 > 0) {
+			reader.Seek(uidHeader.offset1);
+			for (int i = 0; i < uidHeader.size1; i++) {
+				UIDEntry1 uid1;
+				uid1.Read(reader);
+				UIDEntry1List.push_back(uid1);
+			}
+			
+			int endOffset = uidHeader.offset2;
+			if (endOffset == 0)
+				endOffset = uidHeader.offset3;
+			if (endOffset == 0)
+				endOffset = reader.GetSize();
+
+			std::vector<int> allOffsets;
+			for (UIDEntry1& entry : UIDEntry1List) {
+				if (entry.data1Offset != 0) {
+					allOffsets.push_back(entry.data1Offset);
+				}
+				if (entry.data2Offset != 0) {
+					allOffsets.push_back(entry.data2Offset);
+				}
+				if (entry.data3Offset != 0) {
+					allOffsets.push_back(entry.data3Offset);
+				}
+			}
+			allOffsets.push_back(endOffset);
+
+			std::unordered_map<int, int> offsetSizes;
+			for (size_t i = 0; i + 1 < allOffsets.size(); ++i) {
+				int offset = allOffsets[i];
+				int size = allOffsets[i + 1] - offset;
+				offsetSizes[offset] = size;
+			}
+
+			for (UIDEntry1& entry : UIDEntry1List) {
+				entry.readAdditionalData(reader, offsetSizes);
+			}
+
+		}
+		if (uidHeader.offset2 > 0) {
+			reader.Seek(uidHeader.offset2);
+			for (int i = 0; i < uidHeader.size2; i++) {
+				UIDEntry2 uid2;
+				uid2.Read(reader);
+				UIDEntry2List.push_back(uid2);
+			}
+
+		}
+		if (uidHeader.offset3 > 0) {
+			reader.Seek(uidHeader.offset3);
+			for (int i = 0; i < uidHeader.size3; i++) {
+				UIDEntry3 uid3;
+				uid3.Read(reader);
+				UIDEntry3List.push_back(uid3);
+			}
+
+		}
+
+
+
+	}
+	void SaveFile() override {
+		if (!isEdited) {
+			return;
+		}
+
+
+		BinaryWriter* writer = new BinaryWriter(fileIsBigEndian);
+		UIDHeader header;
+		header.size1 = UIDEntry1List.size();
+		header.size2 = UIDEntry2List.size();
+		header.size3 = UIDEntry3List.size();
+		header.u0 = uidHeader.u0;
+		header.u1 = uidHeader.u1;
+		header.frameLength = uidHeader.frameLength;
+		header.width = uidHeader.width;
+		header.height = uidHeader.height;
+		header.u2 = uidHeader.u2;
+
+		header.offset1 = 36;
+
+
+		
+		std::vector<int> dataPositions;
+		int pointer = 36 + (432 * UIDEntry1List.size());
+		for (UIDEntry1& uid : UIDEntry1List) {
+			if (uid.data1.data.size() > 0) {
+				dataPositions.push_back(pointer);
+				pointer += uid.data1.data.size();
+			}
+			else {
+				dataPositions.push_back(0);
+			}
+			if (uid.data2.data.size() > 0) {
+				dataPositions.push_back(pointer);
+				pointer += uid.data2.data.size();
+			}
+			else {
+				dataPositions.push_back(0);
+			}
+			if (uid.data3.data.size() > 0) {
+				dataPositions.push_back(pointer);
+				pointer += uid.data3.data.size();
+			}
+			else {
+				dataPositions.push_back(0);
+			}
+
+
+		}
+
+
+		header.offset2 = pointer;
+		header.offset3 = header.offset2 + (sizeof(UIDEntry2) * UIDEntry2List.size());
+
+		header.Write(writer);
+		int i = 0;
+		writer->Seek(header.offset1);
+		for (UIDEntry1& uid : UIDEntry1List) {
+			uid.data1Offset = dataPositions[i];
+			i += 1;
+			uid.data2Offset = dataPositions[i];
+			i += 1;
+			uid.data3Offset = dataPositions[i];
+			i += 1;
+
+			uid.Write(writer);
+			
+		}
+
+
+		for (UIDEntry1& uid : UIDEntry1List) {
+			uid.writeAdditionalData(writer);
+		}
+
+		writer->Seek(header.offset2);
+		for (UIDEntry2 uid : UIDEntry2List) {
+			uid.Write(writer);
+		}
+
+		writer->Seek(header.offset3);
+		for (UIDEntry3 uid : UIDEntry3List) {
+			uid.Write(writer);
+		}
+
+		fileData = writer->GetData();
+
+
+	}
+
+	void RenderGUI() {
+		int i = 0;
+		isEdited = true;
+		ImGui::Checkbox("Visaulize UID Positions", &UIDVisualize);
+
+
+		ImGui::GetForegroundDrawList()->AddText(ImVec2(800.0f, 900.0f), IM_COL32(255.0f, 255.0f, 255.0f,255.0f), "UID Preview Canvas");
+		ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(800.0f, 100.0f), ImVec2(1440.0f, 450.0f), IM_COL32(2.0f, 2.0f, 2.0f, 255.0f));
+		for (UIDEntry1& entry : UIDEntry1List) {
+			
+			ImGui::PushID(i);
+			ImGui::ColorEdit4("", entry.rgb, ImGuiColorEditFlags_NoInputs);
+			ImGui::SameLine();
+			if (ImGui::TreeNode(("UID Entry: " + std::to_string(i)).c_str())) {
+				ImGui::PushItemWidth(240.0f);
+				ImGui::InputFloat3("Position", entry.position);
+				ImGui::InputFloat3("Rotation", entry.rotation);
+				ImGui::InputFloat3("Scale", entry.scale);
+				ImGui::ColorEdit4("Color", entry.rgb);
+				if (ImGui::TreeNode("Extra Data")) {
+					if (entry.data3.data.size() > 0) {
+						if (ImGui::TreeNode("Animation Data")) {
+							if (ImGui::Button("Delete Animation Data")) {
+								entry.data3.data.clear();
+							}
+							ImGui::TreePop();
+						}
+					}
+
+
+
+					ImGui::TreePop();
+				}
+
+				ImGui::PopItemWidth();
+				ImGui::TreePop();
+			}
+
+
+			ImGui::PopID();
+			
+			if (UIDVisualize) {
+				float scalex = entry.position.x * (640.0f / 1280.0f) + 800.0f;
+				float scaley = entry.position.y * (360.0f / 720.0f) + 100.0f;
+
+				ImGui::GetForegroundDrawList()->AddText(ImVec2(scalex, scaley), IM_COL32(entry.rgb.r * 255.0f, entry.rgb.g * 255.0f, entry.rgb.b * 255.0f, entry.rgb.a * 255.0f), ("UID Entry: " + std::to_string(i)).c_str());
+				
+			}
+
+			i += 1;
+		}
+
+	}
+
+};
 
 
 class MotFileNode : public FileNode {
@@ -579,7 +824,7 @@ public:
 		// Add value if present
 		if (!node->value.empty()) {
 			xml += node->value;
-			
+
 		}
 
 		// Process child nodes recursively
@@ -610,78 +855,97 @@ public:
 		fileIcon = ICON_CI_CODE;
 		TextColor = { 1.0f, 0.0f, 0.914f, 1.0f };
 		fileIsBigEndian = false;
-		nodeType = BXM;		
+		nodeType = BXM;
 		fileFilter = L"Binary XML Files(*.bxm)\0*.bxm;\0";
 	}
 
-	void RenderXMLTree(BXMInternal::XMLNode* node) {
+	void RenderGUI() {
+		if (baseNode->name == "SubPhaseInfoRoot") {
+			ImGui::Text("Phase Editor");
+			BXMInternal::XMLNode* infoList = baseNode->childNodes[0];
+			for (BXMInternal::XMLNode* subNode : infoList->childNodes) {
+				if (ImGui::CollapsingHeader(subNode->childAttributes[0]->value.c_str())) {
+					for (const std::string& paramName : BXMInternal::possibleParams) {
+						// Step 2: Search for this parameter in the subNode
+						BXMInternal::XMLNode* foundParam = nullptr;
+						for (BXMInternal::XMLNode* existingParam : subNode->childNodes) {
+							if (existingParam->name == paramName) {
+								foundParam = existingParam;
+								break;
+							}
+						}
 
-		/*if (ImGui::TreeNode((node->name + " (XMLNode)").c_str())) {
-			if (ImGui::TreeNode("Attributes")) {
-				for (BXMInternal::XMLAttribute* attrib : node->childAttributes) {
+						// If not found, create a dummy node (only for editing)
+						if (!foundParam) {
+							foundParam = new BXMInternal::XMLNode();
+							foundParam->name = paramName;
+							foundParam->value = ""; // default empty
+							subNode->childNodes.push_back(foundParam);
+						}
 
-					std::string text = attrib->value;  // Copy the value so it's modifiable
-					if (ImGui::InputText(attrib->name.c_str(), &text[0], text.size() + 1)) {
-						attrib->value = text;
+						ImGui::PushID(foundParam);
+
+						std::string& paramValue = foundParam->value;
+
+						if (paramName == "RoomNo") {
+							std::vector<std::string> rooms = BXMInternal::SplitString(paramValue, ' ');
+							std::string newRoomData = "";
+							int i = 0;
+							for (std::string& room : rooms) {
+								char* roomBuffer = new char[32];
+								roomBuffer = room.data();
+								ImGui::InputText(("Room " + std::to_string(i)).c_str(), roomBuffer, 32);
+								ImGui::SameLine();
+								if (!ImGui::Button("-")) {
+									newRoomData = newRoomData + " " + std::string(roomBuffer, 32);
+									i += 1;
+								}
+
+
+							}
+							paramValue = newRoomData;
+
+							if (ImGui::Button("New Room")) {
+								paramValue = paramValue + " r000";
+							}
+
+						}
+						else if (paramName == "isRestartPoint") {
+							bool checked = (paramValue == "YES");
+							if (ImGui::Checkbox(paramName.c_str(), &checked)) {
+								paramValue = checked ? "YES" : "NO";
+							}
+						}
+						else if (paramName == "CameraEnable" || paramName == "CameraXEnable" || paramName == "CameraYEnable") {
+							bool checked = (paramValue == "ON");
+							if (ImGui::Checkbox(paramName.c_str(), &checked)) {
+								paramValue = checked ? "ON" : "OFF";
+							}
+						}
+						else if (paramName == "isPlWaitPayment") {
+							bool checked = (paramValue == "YES");
+							if (ImGui::Checkbox(paramName.c_str(), &checked)) {
+								paramValue = checked ? "YES" : "NO";
+							}
+						}
+						else if (paramName == "CameraYaw") {
+							float yaw = paramValue.empty() ? 0.0f : std::stof(paramValue);
+							if (ImGui::InputFloat(paramName.c_str(), &yaw)) {
+								paramValue = std::to_string(yaw);
+							}
+						}
+						else {
+							ImGui::Text("%s: %s", paramName.c_str(), paramValue.c_str());
+						}
+
+						ImGui::PopID();
 					}
-
-
 				}
-				ImGui::TreePop();
-			}
-			if (node->value != "") {
-				std::string text = node->value;  // Copy the value so it's modifiable
-				if (ImGui::InputText("", &text[0], text.size() + 1)) {
-					node->value = text;
-				}
+
 			}
 
-			if (ImGui::TreeNode("Children")) {
-				for (BXMInternal::XMLNode* node2 : node->childNodes) {
-					RenderXMLTree(node2);
-				}
-				ImGui::TreePop();
-			}
-			ImGui::TreePop();
-
-
-		}*/
-
-		std::string currentLine;
-		std::stringstream ss(xmlData);
-		while (std::getline(ss, currentLine)) {
-			for (size_t i = 0; i < currentLine.size(); ++i) {
-				if (currentLine[i] == '<') {
-					ImGui::TextColored(ImColor(255, 0, 0), "<");
-					ImGui::SameLine();
-				}
-				else if (currentLine[i] == '>') {
-					ImGui::TextColored(ImColor(255, 0, 0), ">");
-					ImGui::SameLine();
-				}
-				else if (currentLine[i] == '\"') {
-					ImGui::TextColored(ImColor(0, 255, 0), "\"");
-					ImGui::SameLine();
-				}
-				else if (currentLine[i] == '\n') {
-
-				}
-				else {
-					ImGui::TextColored(ImColor(255, 255, 255), std::string(1, currentLine[i]).c_str());
-					ImGui::SameLine();
-				}
-			}
 		}
-
-
-		/*if (ImGui::InputTextMultiline("XML Editor", xmlBuffer.data(), xmlBuffer.size())) {
-			xmlData = std::string(xmlBuffer.data());
-
-			// If needed, expand buffer to accommodate more text
-			if (xmlData.length() + 1 > xmlBuffer.size()) {
-				xmlBuffer.resize(xmlData.length() + 512);
-			}
-		}*/
+		
 
 	}
 
@@ -726,13 +990,13 @@ public:
 				attrib->value = reader.ReadNullTerminatedString();
 			}
 
-			
-			
+
+
 
 			node->childAttributes.push_back(attrib);
 		}
 
-		
+
 
 		for (int i = 0; i < childCount; i++) {
 			reader.Seek(infoOffset + ((firstChildIndex + i) * 8));
@@ -862,6 +1126,8 @@ class CruelerBatch {
 public:
 	LPDIRECT3DVERTEXBUFFER9 vertexBuffer;
 	LPDIRECT3DINDEXBUFFER9 indexBuffer;
+	std::vector<CUSTOMVERTEX> vertexes;
+	std::vector<unsigned short> indexes;
 	int indexCount;
 	int vertexCount;
 	int materialID;
@@ -902,42 +1168,79 @@ public:
 		BinaryReader reader(fileData, true);
 		reader.SetEndianess(fileIsBigEndian);
 
-		if (fileIsBigEndian) {
-			return;
-		}
 
 		WMBHeader header = WMBHeader();
-		header = reader.ReadStruct<WMBHeader>();
+		header.Read(reader);
 
 		reader.Seek(header.offsetVertexGroups);
-		std::vector<WMBVertexGroup> vertexGroups = reader.ReadStructs<WMBVertexGroup>(header.numVertexGroups);
+		std::vector<WMBVertexGroup> vertexGroups;
+		for (int i = 0; i < header.numVertexGroups; i++) {
+			WMBVertexGroup vtxGroup;
+			vtxGroup.Read(reader);
+			vertexGroups.push_back(vtxGroup);
+		}
+
 		reader.Seek(header.offsetBatches);
-		std::vector<WMBBatch> batches = reader.ReadStructs<WMBBatch>(header.numBatches);
+		std::vector<WMBBatch> batches;
+		for (int i = 0; i < header.numBatches; i++) {
+			WMBBatch itm;
+			itm.Read(reader);
+			batches.push_back(itm);
+		}
+
 		reader.Seek(header.offsetBatchDescription);
 		unsigned int offsetBatchData = reader.ReadUINT32();
 
 		reader.Seek(offsetBatchData);
-		std::vector<WMBBatchData> batchDatas = reader.ReadStructs<WMBBatchData>(header.numBatches);
+		std::vector<WMBBatchData> batchDatas;
+		for (int i = 0; i < header.numBatches; i++) {
+			WMBBatchData itm;
+			itm.Read(reader);
+			batchDatas.push_back(itm);
+		}
+
 		reader.Seek(header.offsetMeshes);
-		std::vector<WMBMesh> meshes = reader.ReadStructs<WMBMesh>(header.numMeshes);
+		std::vector<WMBMesh> meshes;
+		for (int i = 0; i < header.numMeshes; i++) {
+			WMBMesh itm;
+			itm.Read(reader);
+			meshes.push_back(itm);
+		}
+
 		reader.Seek(header.offsetTextures);
-		std::vector<WMBTexture> textures = reader.ReadStructs<WMBTexture>(header.numTextures);
+		std::vector<WMBTexture> textures;
+		for (int i = 0; i < header.numTextures; i++) {
+			WMBTexture itm;
+			itm.Read(reader);
+			textures.push_back(itm);
+		}
+
 
 		reader.Seek(header.offsetMaterials);
-		for (WMBMaterial& mat : reader.ReadStructs<WMBMaterial>(header.numMaterials)) {
+		for (int i = 0; i < header.numMaterials; i++) {
+			WMBMaterial mat;
+			mat.Read(reader);
+			size_t place = reader.Tell();
 			CTDMaterial cmat = CTDMaterial();
+
 			reader.Seek(mat.offsetShaderName);
 			cmat.shader_name = reader.ReadString(16);
 			reader.Seek(mat.offsetTextures);
-			std::vector<WMBTexture> textureMappings = reader.ReadStructs<WMBTexture>(mat.numTextures);
+			std::vector<WMBTexture> textureMappings;
+			for (int i = 0; i < mat.numTextures; i++) {
+				WMBTexture itm;
+				itm.Read(reader);
+				textureMappings.push_back(itm);
+			}
+
 			for (WMBTexture& tex : textureMappings) {
 				cmat.texture_data[tex.flag] = textures[tex.id].id;
 
 			}
 
-
-
 			materials.push_back(cmat);
+
+			reader.Seek(place);
 		}
 
 
@@ -954,7 +1257,7 @@ public:
 			std::vector<unsigned short> batchIDs;
 
 			reader.Seek(mesh.offsetBatches); // this format sucks :fire:
-			batchIDs = reader.ReadStructs<unsigned short>(mesh.numBatches);
+			batchIDs = reader.ReadUINT16Array(mesh.numBatches);
 
 
 			for (unsigned short meshBatchID : batchIDs) {
@@ -966,7 +1269,7 @@ public:
 
 				ctdbatch->vertexCount = activeVtxGroup.numVertexes;
 				ctdbatch->indexCount = activeVtxGroup.numIndexes;
-
+				
 				ctdbatch->materialID = activeBatchData.materialIndex;
 
 
@@ -975,7 +1278,7 @@ public:
 				for (int x = 0; x < activeBatch.numIndices; x++) {
 					indices.push_back(reader.ReadUINT16());
 				}
-
+				ctdbatch->indexes = indices;
 				g_pd3dDevice->CreateIndexBuffer(activeBatch.numIndices * sizeof(short), 0,
 					D3DFMT_INDEX16, D3DPOOL_MANAGED,
 					&ctdbatch->indexBuffer, nullptr);
@@ -992,7 +1295,13 @@ public:
 					reader.Seek(activeVtxGroup.offsetVertexes + activeBatch.vertexStart * sizeof(WMBVertexA));
 					ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
-					std::vector<WMBVertexA> vertexes = reader.ReadStructs<WMBVertexA>(activeBatch.numVertices);
+					std::vector<WMBVertexA> vertexes;
+					for (int i = 0; i < activeBatch.numVertices; i++) {
+						WMBVertexA vtx;
+						vtx.Read(reader);
+						vertexes.push_back(vtx);
+					}
+
 
 					std::vector<CUSTOMVERTEX> convertedVtx;
 					for (WMBVertexA& vertex : vertexes) {
@@ -1014,6 +1323,7 @@ public:
 					HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
 					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 					ctdbatch->vertexBuffer->Unlock();
+					ctdbatch->vertexes = convertedVtx;
 					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 
 				}
@@ -1023,7 +1333,12 @@ public:
 
 					ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
-					std::vector<WMBVertex65847> vertexes = reader.ReadStructs<WMBVertex65847>(activeBatch.numVertices);
+					std::vector<WMBVertex65847> vertexes;
+					for (int i = 0; i < activeBatch.numVertices; i++) {
+						WMBVertex65847 vtx;
+						vtx.Read(reader);
+						vertexes.push_back(vtx);
+					}
 
 
 					std::vector<CUSTOMVERTEX> convertedVtx;
@@ -1046,6 +1361,7 @@ public:
 					HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
 					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 					ctdbatch->vertexBuffer->Unlock();
+					ctdbatch->vertexes = convertedVtx;
 					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 				}
 				else if (header.vertexFormat == 66311) {
@@ -1054,7 +1370,13 @@ public:
 					ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
 
-					std::vector<WMBVertex66311> vertexes = reader.ReadStructs<WMBVertex66311>(activeBatch.numVertices);
+				
+					std::vector<WMBVertex66311> vertexes;
+					for (int i = 0; i < activeBatch.numVertices; i++) {
+						WMBVertex66311 vtx;
+						vtx.Read(reader);
+						vertexes.push_back(vtx);
+					}
 
 					std::vector<CUSTOMVERTEX> convertedVtx;
 					for (WMBVertex66311& vertex : vertexes) {
@@ -1080,6 +1402,7 @@ public:
 					HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
 					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 					ctdbatch->vertexBuffer->Unlock();
+					ctdbatch->vertexes = convertedVtx;
 					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 
 
@@ -1090,7 +1413,13 @@ public:
 					ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
 
-					std::vector<WMBVertex65799> vertexes = reader.ReadStructs<WMBVertex65799>(activeBatch.numVertices);
+					std::vector<WMBVertex65799> vertexes;
+					for (int i = 0; i < activeBatch.numVertices; i++) {
+						WMBVertex65799 vtx;
+						vtx.Read(reader);
+						vertexes.push_back(vtx);
+					}
+
 
 					std::vector<CUSTOMVERTEX> convertedVtx;
 					for (WMBVertex65799& vertex : vertexes) {
@@ -1116,12 +1445,13 @@ public:
 					HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
 					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 					ctdbatch->vertexBuffer->Unlock();
+					ctdbatch->vertexes = convertedVtx;
 					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 
 
 				}
 				ctdmesh->batches.push_back(ctdbatch);
-				
+
 			}
 			displayMeshes.push_back(ctdmesh);
 
@@ -1132,6 +1462,124 @@ public:
 
 	}
 
+
+	void PopupOptions() override {
+		auto it = std::find(openFiles.begin(), openFiles.end(), this);
+		if (ImGui::BeginPopupContextItem())
+		{
+			if (ImGui::Button("Export (WMB)", ImVec2(150, 20))) {
+				ExportFile();
+			}
+
+			if (ImGui::Button("Export (FBX)", ImVec2(150, 20))) {
+				FbxManager* manager = FbxManager::Create();
+				FbxScene* scene = FbxScene::Create(manager, "WMB");
+				scene->GetGlobalSettings().SetSystemUnit(FbxSystemUnit::m);
+				FbxIOSettings* ios = FbxIOSettings::Create(manager, IOSROOT);
+				manager->SetIOSettings(ios);
+				ios->SetBoolProp(EXP_FBX_EMBEDDED, true);
+
+
+
+				for (CruelerMesh* cmesh : displayMeshes) {
+					for (CruelerBatch* batch : cmesh->batches) {
+						FbxSurfaceLambert* material = FbxSurfaceLambert::Create(scene, (cmesh->name + "_material").c_str());
+						HelperFunction::WriteVectorToFile(rawTextureInfo[materials[batch->materialID].texture_data[0]], ("temp\\" + std::to_string(materials[batch->materialID].texture_data[0])));
+						HelperFunction::WriteVectorToFile(rawTextureInfo[materials[batch->materialID].texture_data[2]], ("temp\\" + std::to_string(materials[batch->materialID].texture_data[2])));
+						FbxFileTexture* abTexture = FbxFileTexture::Create(scene, "Albdeo");
+						abTexture->SetFileName(("temp\\" + std::to_string(materials[batch->materialID].texture_data[0])).c_str());
+						abTexture->SetTextureUse(FbxTexture::eStandard);
+						abTexture->SetMappingType(FbxTexture::eUV);
+						abTexture->SetMaterialUse(FbxFileTexture::eModelMaterial);
+						abTexture->SetAlphaSource(FbxFileTexture::eNone);
+						abTexture->SetSwapUV(false);
+						material->Diffuse.ConnectSrcObject(abTexture);
+						material->DiffuseFactor.Set(1.0);
+						FbxFileTexture* nmTexture = FbxFileTexture::Create(scene, "Normal");
+						nmTexture->SetFileName(("temp\\" + std::to_string(materials[batch->materialID].texture_data[2])).c_str());
+						nmTexture->SetTextureUse(FbxTexture::eBumpNormalMap);
+						nmTexture->SetMappingType(FbxTexture::eUV);
+						nmTexture->SetMaterialUse(FbxFileTexture::eModelMaterial);
+						nmTexture->SetAlphaSource(FbxFileTexture::eNone);
+						nmTexture->SetSwapUV(false);
+						material->BumpFactor.Set(1.0);
+
+						material->NormalMap.ConnectSrcObject(nmTexture);
+
+						
+
+						material->TransparencyFactor.Set(0.0);
+						material->TransparentColor.Set(FbxDouble3(0.0, 0.0, 0.0));
+						
+
+						FbxMesh* mesh = FbxMesh::Create(scene, (cmesh->name + "_mesh").c_str());
+						
+						FbxGeometryElementUV* lUVDiffuseElement = mesh->CreateElementUV("Float2");
+						
+						FBX_ASSERT(lUVDiffuseElement != NULL);
+						lUVDiffuseElement->SetMappingMode(FbxGeometryElement::eByControlPoint);
+						lUVDiffuseElement->SetReferenceMode(FbxGeometryElement::eDirect);
+
+
+						mesh->InitControlPoints(batch->vertexes.size());
+						for (int i = 0; i < batch->vertexes.size(); i++) {
+							mesh->SetControlPointAt(FbxVector4(batch->vertexes[i].x, batch->vertexes[i].y, batch->vertexes[i].z), i);
+							lUVDiffuseElement->GetDirectArray().Add(FbxVector2(batch->vertexes[i].u, 1.0 - batch->vertexes[i].v));
+						}
+
+						lUVDiffuseElement->GetIndexArray().SetCount(batch->indexes.size());
+
+						for (int i = 0; i < batch->indexes.size(); i+=3) {
+							mesh->BeginPolygon();
+							int idx0 = batch->indexes[i];
+							int idx1 = batch->indexes[i + 1];
+							int idx2 = batch->indexes[i + 2];
+
+							mesh->AddPolygon(idx0);
+							mesh->AddPolygon(idx1);
+							mesh->AddPolygon(idx2);
+
+							mesh->EndPolygon();
+
+						}
+
+
+						 
+
+						FbxNode* meshNode = FbxNode::Create(scene, cmesh->name.c_str());
+						meshNode->AddMaterial(material);
+						meshNode->SetNodeAttribute(mesh);
+						scene->GetRootNode()->AddChild(meshNode);
+
+					}
+				}
+				
+
+				FbxExporter* exporter = FbxExporter::Create(manager, "");
+				exporter->Initialize("output.fbx", -1, manager->GetIOSettings());
+				exporter->Export(scene);
+				exporter->Destroy();
+
+			}
+
+			if (it != openFiles.end()) { // Ensure it exists before erasing
+				if (ImGui::Button("Close", ImVec2(150, 20))) {
+					closeNode(this);
+				}
+			}
+			else {
+				if (ImGui::Button("Replace", ImVec2(150, 20))) {
+					ReplaceFile();
+				}
+			}
+
+
+
+			//PopupOptionsEx();
+
+			ImGui::EndPopup();
+		}
+	}
 
 	void RenderMesh() {
 		rotationAngle += 0.01f;
@@ -1147,8 +1595,8 @@ public:
 						}
 					}
 					else {
-						if (textureMap.find(mesh->materials[0]->texture_data[0]) != textureMap.end()) { // hack 
-							g_pd3dDevice->SetTexture(0, textureMap[mesh->materials[0]->texture_data[0]]);
+						if (textureMap.find(materials[batch->materialID].texture_data[0]) != textureMap.end()) { // hack 
+							g_pd3dDevice->SetTexture(0, textureMap[materials[batch->materialID].texture_data[0]]);
 						}
 						else {
 							g_pd3dDevice->SetTexture(0, textureMap[0]);
@@ -1188,7 +1636,7 @@ public:
 		else {
 			ImGui::Text("WMB Meshes");
 		}
-		
+
 		int i = 0;
 		for (CruelerMesh* mesh : displayMeshes) {
 			i += 1;
@@ -1196,7 +1644,7 @@ public:
 			ImGui::SameLine();
 			ImGui::Checkbox((mesh->name).c_str(), &mesh->visibility);
 
-			
+
 
 		}
 	}
@@ -1227,13 +1675,13 @@ public:
 		reader.SetEndianess(fileIsBigEndian);
 
 		reader.Seek(0x6);
-		
+
 		int modelCount = reader.ReadUINT16();
 		int offsetModelDef = reader.ReadUINT32();
 
 		reader.Seek(offsetModelDef);
 		std::vector<unsigned int> meshOffsets;
-		
+
 		for (int i = 0; i < modelCount; i++) {
 			meshOffsets.push_back(reader.ReadUINT32());
 		}
@@ -1253,7 +1701,7 @@ public:
 			else {
 				size = fileData.size() - meshes[i].offset;
 			}
-			
+
 			WmbFileNode* node = new WmbFileNode(std::string(meshes[i].name));
 			node->isSCR = true;
 			node->scrNode = this;
@@ -1271,6 +1719,9 @@ public:
 
 	}
 };
+
+
+
 
 class BnkFileNode : public FileNode {
 public:
@@ -1304,9 +1755,72 @@ public:
 
 		}
 
-		
-		
-		std::string tmpHeader = "";
+
+
+
+		reader.Seek(0x8 + headerLength);
+		while (!reader.EndOfBuffer()) {
+			std::string chunkType = reader.ReadString(4);
+			int chunkSize = reader.ReadUINT32();
+			int nextChunkPosition = reader.Tell() + chunkSize;
+
+			if (chunkType == "DIDX") {
+				std::vector<int> wemIDs;
+				std::vector<int> wemOffsets;
+				std::vector<int> wemSizes;
+				if (chunkSize > 0) {
+					int wemCount = (chunkSize / 12);
+					for (int i = 0; i < wemCount; i++) {
+						wemIDs.push_back(reader.ReadUINT32());
+						wemOffsets.push_back(reader.ReadUINT32());
+						wemSizes.push_back(reader.ReadUINT32());
+					}
+					reader.ReadUINT32();
+					reader.ReadUINT32();
+					int baseOffset = reader.Tell();
+					// The DATA chunk *should* always be after DIDX, if it isn't uhhh... kick sand?
+
+					for (int i = 0; i < wemCount; i++) {
+						reader.Seek(wemOffsets[i] + baseOffset);
+						std::string wemName = std::to_string(wemIDs[i]) + ".wem";
+						FileNode* childNode = HelperFunction::LoadNode(wemName, reader.ReadBytes(wemSizes[i]), false, false);
+						if (childNode) {
+							children.push_back(childNode);
+						}
+
+					}
+				}
+			}
+			if (chunkType == "HIRC") {
+				// Chunk lore
+				int children = reader.ReadUINT32();
+				for (int i = 0; i < children; i++) {
+					int flag = reader.ReadINT8();
+					int size = reader.ReadUINT32();
+					int nextHircChunkPosition = reader.Tell() + size;
+					int uid = reader.ReadUINT32();
+
+					if (flag == 0x4) {
+						
+					}
+
+
+					reader.Seek(nextHircChunkPosition);
+				}
+
+
+
+			}
+
+
+			reader.Seek(nextChunkPosition);
+
+		}
+
+
+
+
+		/*std::string tmpHeader = "";
 		int tmpLength = headerLength;
 		reader.Seek(0x8);
 		while (tmpHeader != "DIDX") {
@@ -1320,9 +1834,7 @@ public:
 			tmpLength = reader.ReadUINT32();
 		}
 
-		std::vector<int> wemIDs;
-		std::vector<int> wemOffsets;
-		std::vector<int> wemSizes;
+
 
 
 		// Checking the final header is actually DIDX
@@ -1353,12 +1865,12 @@ public:
 
 
 
-		}
+		}*/
 
 
 	}
 	void SaveFile() override {
-		
+
 	}
 };
 
@@ -1390,13 +1902,13 @@ public:
 		unsigned int NamesOffset = reader.ReadUINT32();
 		unsigned int SizesOffset = reader.ReadUINT32();
 		unsigned int HashMapOffset = reader.ReadUINT32();
-		
+
 		reader.Seek(PositionsOffset);
 		std::vector<int> offsets;
 		for (int f = 0; f < FileCount; f++) {
 			offsets.push_back(reader.ReadUINT32());
 		}
-		
+
 		reader.Seek(NamesOffset);
 		int nameLength = reader.ReadUINT32();
 		std::vector<std::string> names;
@@ -1405,7 +1917,7 @@ public:
 			temp_name.erase(std::remove(temp_name.begin(), temp_name.end(), '\0'), temp_name.end());
 			names.push_back(temp_name);
 		}
-		
+
 		reader.Seek(SizesOffset);
 		std::vector<int> sizes;
 		for (int f = 0; f < FileCount; f++) {
@@ -1428,8 +1940,11 @@ public:
 
 	void SaveFile() override {
 		std::cout << "Saving DAT file: " << fileName << std::endl;
-		
-		CTDLog::Log::getInstance().LogNote(fileIcon + " Recompiling " + fileName);
+
+		auto start_noio = std::chrono::high_resolution_clock::now();
+
+
+
 
 		int longestName = 0;
 
@@ -1446,7 +1961,7 @@ public:
 		for (FileNode* node : children) {
 			fileNames.push_back(node->fileName);
 		}
-		
+
 		int shift = std::min(31, 32 - IntLength(fileNames.size()));
 		int bucketSize = 1 << (31 - shift);
 
@@ -1490,7 +2005,7 @@ public:
 		writer->WriteString("DAT");
 		writer->WriteByteZero();
 		int fileCount = children.size();
-		
+
 		int positionsOffset = 0x20;
 		int extensionsOffset = positionsOffset + 4 * fileCount;
 		int namesOffset = extensionsOffset + 4 * fileCount;
@@ -1543,7 +2058,7 @@ public:
 
 		for (int i = 0; i < fileCount; i++)
 			writer->WriteINT16(hashData.Indices[i]);
-		
+
 		std::vector<int> offsets;
 		for (FileNode* child : children) {
 
@@ -1567,7 +2082,10 @@ public:
 
 		fileData = writer->GetData();
 
+		auto finish = std::chrono::high_resolution_clock::now();
+		auto millisecondsnoio = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start_noio);
 
+		CTDLog::Log::getInstance().LogNote(fileIcon + " Rebuilt in " + std::to_string(millisecondsnoio.count()) + "ms: " + fileName);
 	}
 };
 

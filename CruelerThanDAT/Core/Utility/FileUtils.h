@@ -18,3 +18,4 @@ bool ReadFileIntoVector(const std::string& filePath, std::vector<char>& data) {
     file.read(reinterpret_cast<char*>(data.data()), fileSize);
     return true;
 }
+

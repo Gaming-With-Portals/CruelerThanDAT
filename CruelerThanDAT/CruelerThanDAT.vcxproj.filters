@@ -122,6 +122,12 @@
     <ClInclude Include="json.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Core\Utility\UID.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Utility\CommonTypes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Font Include="Assets\codicon.ttf" />
@@ -137,6 +143,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="resources.rc" />
+    <None Include="C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\release\libfbxsdk.dll" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="CruelerThanDAT.rc">

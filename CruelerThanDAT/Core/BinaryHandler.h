@@ -40,6 +40,32 @@ public:
         return value;
     }
 
+    std::vector<uint32_t> ReadUINT32Array(int count) {
+        std::vector<uint32_t> output;
+        for (int i = 0; i < count; i++) {
+            output.push_back(ReadUINT32());
+        }
+
+
+        return output;
+
+    }
+
+
+    int8_t ReadINT8() {
+        if (offset + sizeof(int8_t) > data.size()) {
+            throw std::runtime_error("Read beyond the buffer size.");
+        }
+        int8_t value = *reinterpret_cast<int8_t*>(&data[offset]);
+        offset += sizeof(int8_t);
+
+        if (isBigEndian) {
+            value = ReverseEndian(value);
+        }
+
+        return value;
+    }
+
     float ReadFloat() {
         if (offset + sizeof(float) > data.size()) {
             throw std::runtime_error("Read beyond the buffer size.");
@@ -85,6 +111,17 @@ public:
         }
 
         return value;
+    }
+
+    std::vector<uint16_t> ReadUINT16Array(int count) {
+        std::vector<uint16_t> output;
+        for (int i = 0; i < count; i++) {
+            output.push_back(ReadUINT16());
+        }
+
+
+        return output;
+
     }
 
     // Read a string
@@ -165,6 +202,9 @@ public:
         isBigEndian = isBig;
     }
 
+    size_t GetSize() {
+        return data.size();
+    }
 
 
 private:

@@ -1,4 +1,5 @@
 #include "FileNodes.h"
+const FbxSystemUnit fbxsdk::FbxSystemUnit::m(100.0);
 
 FileNode* FileNode::selectedNode = nullptr;
 
@@ -20,6 +21,38 @@ int IntLength(int value) {
 		length++;
 	}
 	return length;
+}
+
+bool HelperFunction::WriteVectorToFile(const std::vector<char> dataVec, const std::string& filename) {
+	std::string fullPath = filename;
+
+	std::ofstream out(fullPath, std::ios::binary);
+	if (!out) return false;
+
+	out.write(dataVec.data(), dataVec.size());
+	return out.good();
+}
+
+std::vector<std::string> BXMInternal::SplitString(const std::string& str, char delimiter) {
+	std::vector<std::string> result;
+	std::string current;
+
+	for (char c : str) {
+		if (c == delimiter) {
+			if (!current.empty()) {
+				result.push_back(current);
+				current.clear();
+			}
+		}
+		else {
+			current += c;
+		}
+	}
+	if (!current.empty()) {
+		result.push_back(current);
+	}
+
+	return result;
 }
 
 int HelperFunction::Align(int value, int alignment) {
