@@ -1,12 +1,64 @@
 #pragma once
 #include "CommonTypes.h"
+namespace MGRUI {
+	enum UIDData1Type {
+		MCD,
+		UVD,
+		UNK
+	};
+}
 
+
+struct UIDData1MCD {
+
+};
+
+struct UIDData1UVD {
+	float width;
+	float height;
+	uint32_t texID;
+	uint32_t uvdID;
+	bool Read(BinaryReader& br) {
+		width = br.ReadFloat();
+		height = br.ReadFloat();
+		texID = br.ReadUINT32();
+		uvdID = br.ReadUINT32();
+
+		if (floor(width) == ceil(width) && floor(height) == ceil(height)) { // Weird method but if it works I can't blame em
+			return true;
+		}
+		else {
+			return false;
+		}
+
+
+	}
+};
 
 // Thank you savior RaiderB
 struct UIDData1 {
+	MGRUI::UIDData1Type dataType = MGRUI::UNK;
+	UIDData1MCD mcdData;
+	UIDData1UVD uvdData;
+
 	std::vector<char> data;
 	void Read(BinaryReader& br, int size) {
+		size_t startPos = br.Tell();
 		data = br.ReadBytes(size);
+		br.Seek(startPos);
+		// Type Checking
+		if (size > 36) {
+			dataType = MGRUI::UNK;
+
+			if (uvdData.Read(br)) {
+				dataType = MGRUI::UVD;
+			}
+
+
+		}
+
+
+
 	}
 
 	void Write(BinaryWriter* bw) {
@@ -27,17 +79,76 @@ struct UIDData2 {
 
 };
 
-struct UIDData3 {
-	std::vector<char> data;
-	void Read(BinaryReader& br, int size) {
-		data = br.ReadBytes(size);
+struct Data3Header {
+	uint32_t beginOffset;
+	uint32_t size1;
+	uint32_t propertyIndex;
+	float minValue;
+	float maxValue;
+	float startTime;
+	float endTime;
+	uint32_t u_3;
+
+	void Read(BinaryReader& br) {
+		beginOffset = br.ReadUINT32();
+		size1 = br.ReadUINT32();
+		propertyIndex = br.ReadUINT32();
+		minValue = br.ReadFloat();
+		maxValue = br.ReadFloat();
+		startTime = br.ReadFloat();
+		endTime = br.ReadFloat();
+		u_3 = br.ReadUINT32();
+	}
+	void Write(BinaryWriter* bw) {
+		bw->WriteUINT32(beginOffset);
+		bw->WriteUINT32(size1);
+		bw->WriteUINT32(propertyIndex);
+		bw->WriteFloat(minValue);
+		bw->WriteFloat(maxValue);
+		bw->WriteFloat(startTime);
+		bw->WriteFloat(endTime);
+		bw->WriteUINT32(u_3);
+	}
+	
+
+};
+
+struct Data3Entry {
+	float time;
+	uint16_t value;
+	uint16_t u_0;
+
+	void Read(BinaryReader& br) {
+		time = br.ReadFloat();
+		value = br.ReadUINT16();
+		u_0 = br.ReadUINT16();
 	}
 
 	void Write(BinaryWriter* bw) {
-		bw->WriteBytes(data);
+		bw->WriteFloat(time);
+		bw->WriteUINT16(value);
+		bw->WriteUINT16(u_0);
+	}
+
+
+};
+
+struct UIDData3 {
+	std::vector<char> data;
+	Data3Header d3Header;
+	void Read(BinaryReader& br, int size) {
+		uint32_t firstOffset = br.ReadUINT32();
+		uint32_t entriesCount = (firstOffset - br.Tell()) / 32;
+		d3Header.Read(br);
+	}
+
+	void Write(BinaryWriter* bw) {
+		
 	}
 
 };
+
+
 
 
 struct UIDHeader {

@@ -267,9 +267,9 @@ struct WMBHeader {
     uint32_t vertexFormat;
     uint16_t u_b;
     int16_t u_c;
-    WMBVector pos1;
-    WMBVector pos2;
-    uint32_t offsetVertexGroups;
+    WMBVector pos1; // 24
+    WMBVector pos2; // 36
+    uint32_t offsetVertexGroups; // 48
     uint32_t numVertexGroups;
     uint32_t offsetBatches;
     uint32_t numBatches;

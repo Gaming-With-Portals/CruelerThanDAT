@@ -82,6 +82,14 @@ namespace HelperFunction {
             outputFile->SetFileData(data);
             outputFile->LoadFile();
         }
+        else if (fileExtension == ".uvd") {
+            outputFile = new UvdFileNode(fileName);
+            if (forceEndianess) {
+                outputFile->fileIsBigEndian = bigEndian;
+            }
+            outputFile->SetFileData(data);
+            outputFile->LoadFile();
+        }
         else if (fileType == 5521732) {
             outputFile = new DatFileNode(fileName);
             if (forceEndianess) {
@@ -240,9 +248,15 @@ void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
         WTP.Seek(offsets[i]);
         std::vector<char> data = WTP.ReadBytes(sizes[i]);
         LPCVOID ptr = static_cast<LPCVOID>(data.data());
-        D3DXCreateTextureFromFileInMemory(g_pd3dDevice, ptr, sizes[i], &tmpTexture);
-        rawTextureInfo[idx[i]] = data;
-        textureMap[idx[i]] = tmpTexture;
+        HRESULT hr = D3DXCreateTextureFromFileInMemory(g_pd3dDevice, ptr, sizes[i], &tmpTexture);
+        if (FAILED(hr)) {
+            CTDLog::Log::getInstance().LogError("Failed to load texture");
+        }
+        else {
+            rawTextureInfo[idx[i]] = data;
+            textureMap[idx[i]] = tmpTexture;
+        }
+
     }
 
 }
@@ -443,6 +457,11 @@ void RenderFrame() {
     static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
     static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
     static bool spinModel = false;
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
 
     // Start the ImGui frame
     ImGui_ImplDX9_NewFrame();
@@ -584,7 +603,10 @@ void RenderFrame() {
             UidFileNode* uidNode = ((UidFileNode*)FileNode::selectedNode);
             uidNode->RenderGUI();
         }
-
+        else if (FileNode::selectedNode->nodeType == FileNodeTypes::UVD) {
+            UvdFileNode* uvdNode = ((UvdFileNode*)FileNode::selectedNode);
+            uvdNode->RenderGUI();
+        }
         else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
             showViewport = false;
             WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
@@ -928,6 +950,7 @@ int main(int argc, char* argv[])
     }
 
     ::ShowWindow(::GetConsoleWindow(), SW_HIDE);
+
 
     CTDLog::Log::getInstance().LogNote("CruelerThanDAT Ready");
 

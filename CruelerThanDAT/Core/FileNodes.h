@@ -90,7 +90,8 @@ enum FileNodeTypes {
 	DAT,
 	WTB,
 	LY2,
-	UID
+	UID,
+	UVD
 };
 
 int IntLength(int);
@@ -743,6 +744,15 @@ public:
 				ImGui::InputFloat3("Rotation", entry.rotation);
 				ImGui::InputFloat3("Scale", entry.scale);
 				ImGui::ColorEdit4("Color", entry.rgb);
+				if (entry.data1.dataType == MGRUI::UVD) {
+					if (ImGui::TreeNode("UVD Data")) {
+						ImGui::Text("Texture ID: %d", entry.data1.uvdData.texID);
+						ImGui::Text("UVD ID: %d", entry.data1.uvdData.uvdID);
+						ImGui::TreePop();
+					}
+				}
+
+
 				if (ImGui::TreeNode("Extra Data")) {
 					if (entry.data3.data.size() > 0) {
 						if (ImGui::TreeNode("Animation Data")) {
@@ -779,6 +789,120 @@ public:
 	}
 
 };
+
+struct UvdTexture {
+	std::string name;
+	uint32_t id;
+};
+
+struct UvdEntry {
+	std::string name;
+	uint32_t ID;
+	uint32_t textureID;
+	float x;
+	float y;
+	float width;
+	float height;
+	float widthInverse;
+	float heightInverse;
+
+	void Read(BinaryReader& br) {
+		name = br.ReadString(64);
+		ID = br.ReadUINT32();
+		textureID = br.ReadUINT32();
+		x = br.ReadFloat();
+		y = br.ReadFloat();
+		width = br.ReadFloat();
+		height = br.ReadFloat();
+		widthInverse = br.ReadFloat();
+		heightInverse = br.ReadFloat();
+	}
+
+};
+
+
+
+class UvdFileNode : public FileNode {
+public:
+	std::vector<UvdTexture> uvdTextures;
+	std::vector<UvdEntry> uvdEntries;
+
+	UvdFileNode(std::string fName) : FileNode(fName) {
+		fileIcon = ICON_CI_LIBRARY;
+		TextColor = { 1.0f, 0.0f, 0.376f, 1.0f };
+		nodeType = UVD;
+		fileFilter = L"UI Element File(*.uvd)\0*.uvd;\0";
+	}
+	void LoadFile() override {
+		BinaryReader reader(fileData, fileIsBigEndian);
+		reader.Seek(0x4);
+		uint32_t entriesCount = reader.ReadUINT32();
+		uint32_t entriesOffset = reader.ReadUINT32();
+		uint32_t texturesOffset = reader.ReadUINT32();
+		uint32_t textureCount = (reader.GetSize() - texturesOffset) / 36;
+
+		reader.Seek(texturesOffset);
+		for (int a = 0; a < textureCount; a++) {
+			UvdTexture texture = UvdTexture();
+			texture.name = reader.ReadString(32);
+			texture.id = reader.ReadUINT32();
+			uvdTextures.push_back(texture);
+		}
+
+		reader.Seek(entriesOffset);
+		for (int a = 0; a < entriesCount; a++) {
+			UvdEntry texture = UvdEntry();
+			texture.Read(reader);
+			uvdEntries.push_back(texture);
+		}
+
+
+
+
+	}
+
+	void RenderGUI() {
+		if (ImGui::BeginTabBar("uvd_editor_bar")) {
+			if (ImGui::BeginTabItem("UVD Entries")) {
+				for (UvdEntry entry : uvdEntries) {
+					if (textureMap.find(entry.textureID) != textureMap.end()) {
+
+						D3DSURFACE_DESC desc;
+						textureMap[entry.textureID]->GetLevelDesc(0, &desc);  // Get info for mip level 0 (the base level)
+						UINT texWidth = desc.Width;
+						UINT texHeight = desc.Height;
+						ImVec2 uv0(entry.x / (float)texWidth, entry.y / (float)texHeight);
+						ImVec2 uv1((entry.x + entry.width) / (float)texWidth, (entry.y + entry.height) / (float)texHeight);
+						ImGui::Image((ImTextureID)(intptr_t)textureMap[entry.textureID], ImVec2(64, 64), uv0, uv1);
+					}
+					else {
+						ImGui::Image((ImTextureID)(intptr_t)textureMap[0], ImVec2(64, 64));
+					}
+
+
+					
+					ImGui::SameLine();
+					if (ImGui::TreeNode(entry.name.c_str())) {
+						ImGui::Text("ID: %d", entry.ID);
+						ImGui::TreePop();
+					}
+
+				}
+
+
+				ImGui::EndTabItem();
+			}
+
+
+			ImGui::EndTabBar();
+		}
+	}
+
+	void SaveFile() override {
+
+	}
+};
+
 
 
 class MotFileNode : public FileNode {
@@ -1278,8 +1402,40 @@ public:
 				for (int x = 0; x < activeBatch.numIndices; x++) {
 					indices.push_back(reader.ReadUINT16());
 				}
+
+				if (fileIsBigEndian) { // what the actual fuck platinum
+					std::vector<unsigned short> chain;
+					std::vector<unsigned short> newIndices;
+					bool reverse = false;
+					for (unsigned short& indice : indices) {
+						if (indice == 0xFFFF) {
+							chain.clear();
+							reverse = false;
+							continue;
+						}
+						chain.push_back(indice);
+						if (chain.size() > 3) {
+							chain.erase(chain.begin());
+						}
+						if (chain.size() == 3) {
+							if (reverse) {
+								std::reverse(chain.begin(), chain.end());
+							}
+							newIndices.insert(newIndices.end(), chain.begin(), chain.end());
+							if (reverse) {
+								std::reverse(chain.begin(), chain.end());
+							}
+							reverse = !reverse;
+
+						}
+					}
+
+					indices = newIndices;
+				}
+				ctdbatch->indexCount = indices.size(); 
 				ctdbatch->indexes = indices;
-				g_pd3dDevice->CreateIndexBuffer(activeBatch.numIndices * sizeof(short), 0,
+
+				g_pd3dDevice->CreateIndexBuffer(indices.size() * sizeof(short), 0,
 					D3DFMT_INDEX16, D3DPOOL_MANAGED,
 					&ctdbatch->indexBuffer, nullptr);
 				void* pIndexData = nullptr;
@@ -1483,6 +1639,7 @@ public:
 
 				for (CruelerMesh* cmesh : displayMeshes) {
 					for (CruelerBatch* batch : cmesh->batches) {
+						// TODO: GLTF
 						FbxSurfaceLambert* material = FbxSurfaceLambert::Create(scene, (cmesh->name + "_material").c_str());
 						HelperFunction::WriteVectorToFile(rawTextureInfo[materials[batch->materialID].texture_data[0]], ("temp\\" + std::to_string(materials[batch->materialID].texture_data[0])));
 						HelperFunction::WriteVectorToFile(rawTextureInfo[materials[batch->materialID].texture_data[2]], ("temp\\" + std::to_string(materials[batch->materialID].texture_data[2])));
@@ -1653,10 +1810,25 @@ public:
 
 struct SCRMesh {
 	unsigned int offset;
-	char name[64];
+	std::string name;
 	WMBVector position;
 	WMBVector rotation;
 	WMBVector scale;
+
+	void Read(BinaryReader& br) {
+		offset = br.ReadUINT32();
+		name = br.ReadString(64);
+		position.x = br.ReadFloat();
+		position.y = br.ReadFloat();
+		position.z = br.ReadFloat();
+		rotation.x = br.ReadFloat();
+		rotation.y = br.ReadFloat();
+		rotation.z = br.ReadFloat();
+		scale.x = br.ReadFloat();
+		scale.y = br.ReadFloat();
+		scale.z = br.ReadFloat();
+
+	}
 
 };
 
@@ -1689,7 +1861,8 @@ public:
 		std::vector<SCRMesh> meshes;
 		for (int offset : meshOffsets) {
 			reader.Seek(offset);
-			SCRMesh mesh = reader.ReadStruct<SCRMesh>();
+			SCRMesh mesh;
+			mesh.Read(reader);
 			meshes.push_back(mesh);
 		}
 		for (int i = 0; i < modelCount; i++) {
