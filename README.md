@@ -20,3 +20,8 @@
 
 ### Build requirements:
 - DirectX Legacy SDK (2010)
+    - The DXSDK_DIR environment variable should be set. The installer for the SDK will do it for you usually, if it doesn't set it to the path containing the Include and Lib folders.
+- libcurl (static, MSVC, headers)
+    - The FBXSDK_DIR environment variable should be set manually. Set it to the path containing the include and lib folders.
+- FBX SDK
+    - The CURL_DIR environment variable should be set manually. Set it to the path containing the include and lib folders.
