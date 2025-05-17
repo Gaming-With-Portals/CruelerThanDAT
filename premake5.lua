@@ -40,7 +40,7 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 		symbols "On"
 		optimize "Off"
 		linktimeoptimization "Off"
-
+		
 	filter { "configurations:Release" }
 		symbols "On"
 		optimize "Full"
@@ -57,8 +57,28 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 		-- the Premake documentation.
 		kind "ConsoleApp"
 
-		-- This is the compiler. msc means MSVC, but it can also be set to gcc, clang or dotnet.
-		toolset "msc"
+		if (
+			"gmake" == _ACTION or
+			"gmakelegacy" == _ACTION) then
+			toolset "clang"
+		elseif (
+			"vs2022" == _ACTION or
+			"vs2019" == _ACTION or
+			"vs2017" == _ACTION or
+			"vs2015" == _ACTION or
+			"vs2013" == _ACTION or
+			"vs2012" == _ACTION or
+			"vs2010" == _ACTION or
+			"vs2008" == _ACTION or
+			"vs2005" == _ACTION) then
+			toolset "msc"
+		else
+			error("Action not supported")
+		end
+
+		defines {
+			"mLefttChild=mLeftChild", -- Fix typo in the FBX SDK from our end with macros.
+		}
 
 		-- This resolves to a better post build command than the original file, as Premake will
 		-- make it check that Assets exists before the copy command. Also this is cross platform
@@ -96,12 +116,12 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 			"libfbxsdk",
 			"libcurl_a", -- Not sure why but when *I* built libcurl, the file came out as libcurl_a.lib, not libcurl.lib.
 		}
-		
+
 		files {
 			"CruelerThanDAT/**.cpp",
 			"CruelerThanDAT/**.hpp",
 			"CruelerThanDAT/**.h",
 
-			-- Ideally let's avoid Microsoft-y things like this for the sake of portability, but that'll be a separate PR.
-			"CruelerThanDAT/**.rc",
+			-- TODO: Filter this to add it to VS but not Make
+			--"CruelerThanDAT/**.rc",
 		}
