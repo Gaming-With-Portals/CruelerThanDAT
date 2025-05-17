@@ -6,6 +6,8 @@
 *.sln
 *.vcxproj
 *.vcxproj.filters
+*.make
+Makefile
 build-*/
 
 # User-specific files
