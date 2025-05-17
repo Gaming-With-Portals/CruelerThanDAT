@@ -1,30 +1,15 @@
--- This variable is gonna be set automatically by the DirectX 2010 SDK installer and
--- therefore we get this in whatever path it is just from it being installed.
--- If for whatever weird reason, the SDK is installed but this variable wasn't set, or
--- the user unset it somehow, they'll have to set it manually.
 local directx = os.getenv("DXSDK_DIR")
-
--- The FBX SDK doesn't set a variable to get the path to it, so let's just agree to set
--- it manually ourselves for the sake of having a sane, portable project script.
 local fbx = os.getenv("FBXSDK_DIR")
 
--- As far as I'm aware, on Windows, you don't do installing libcurl, only the curl command,
--- so we're gonna do the same as with the FBX SDK.
-local curl = os.getenv("CURL_DIR")
-
 if not directx then
-	error("DirectX 2010 SDK not found. To solve, install it if you haven't already, and then make sure DXSDK_DIR is set properly.")
+	error("DirectX 2010 SDK not found. To solve, install it if you haven't already, and then make sure DXSDK_DIR is set properly, if not, do it manually.")
 end
 
 if not fbx then
 	error("FBX SDK not found. Install it if you haven't already, and then set the FBXSDK_DIR variable to the path for it manually.")
 end
 
-if not curl then
-	error("cURL not found. Install it if you haven't already, and then set the CURL_DIR variable to the path for it manually. This project expects cURL to be compiled with MSVC.")
-end
-
-workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
+workspace "CruelerThanDAT"
 	language "C++"
 	cppdialect "C++20"
 	systemversion "latest"
@@ -35,7 +20,10 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 	-- as it's designed with portability across architectures and basic-type consistency in mind.
 	architecture "x86_64"
 
-	configurations { "Debug", "Release", } -- You can add more if you want.
+	configurations { "Debug", "Release", }
+
+	targetdir ("build-%{cfg.longname}/")
+	objdir ("build-obj/")
 
 	filter { "configurations:Debug" }
 		symbols "On"
@@ -47,10 +35,56 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 		optimize "Full"
 		linktimeoptimization "On"
 
-	filter {} -- Maybe unnecessary?
+	project "cURL"
+		kind "Makefile"
+		language "C"
+		location "depends/curl/"
 
-	targetdir ("build-%{cfg.longname}/")
-	objdir ("build-obj/%{cfg.longname}/")
+		if ("gmake" == _ACTION or
+			"gmakelegacy" == _ACTION) then
+				buildcommands {
+					-- TODO: Filter each VS version separately for this command to match it.
+					"cmake -S . -B ../../build-curl/%{cfg.longname}/ -G \"Unix Makefiles\" -DBUILD_SHARED_LIBS=OFF -DCURL_STATICLIB=ON -DCURL_USE_LIBPSL=OFF -DCMAKE_BUILD_TYPE=%{cfg.longname} -DCMAKE_C_COMPILER=clang",
+					-- IMPORTANT TODO: ADD LIBPSL TO THE CULR BUILD INSTEAD OF SKIPPING IT.                                      ^~~~~~~~~~~~~~~~~~~~^
+					--                 THIS IS IMPORTANT BECAUSE CURL USES LIBPSL TO PROTECT
+					--                 AGAINST HACKING ATTEMPTS RELATED TO COOKIES.
+					--                 DO NOT MERGE THIS BRANCH UNTIL THIS IS FIXED.
+	
+					-- TODO: Add an option somehow so -j4 can be changed by the user. -j4 means multi-threaded build with four threads.
+					"cmake --build ../../build-curl/%{cfg.longname}/ --config %{cfg.longname} -j4",
+				}
+				filter { "configurations:Debug" }
+					buildoutputs { "../../build-curl/%{cfg.longname}/lib/%{cfg.longname}/libcurl-d.lib" }
+				filter { "configurations:Release" }
+					buildoutputs { "../../build-curl/%{cfg.longname}/lib/%{cfg.longname}/libcurl.lib" }
+		elseif (
+			"vs2022" == _ACTION or
+			"vs2019" == _ACTION or
+			"vs2017" == _ACTION or
+			"vs2015" == _ACTION or
+			"vs2013" == _ACTION or
+			"vs2012" == _ACTION or
+			"vs2010" == _ACTION or
+			"vs2008" == _ACTION or
+			"vs2005" == _ACTION) then
+			buildcommands {
+				-- TODO: Filter each VS version separately for this command to match it.
+				"cmake -S . -B ../../build-curl/%{cfg.longname}/ -G \"Visual Studio 17 2022\" -DBUILD_SHARED_LIBS=OFF -DCURL_STATICLIB=ON -DCURL_USE_LIBPSL=OFF -DCMAKE_BUILD_TYPE=%{cfg.longname}",
+				-- IMPORTANT TODO: ADD LIBPSL TO THE CULR BUILD INSTEAD OF SKIPPING IT.                           ^~~~~~~~~~~~~~~~~~~~^
+				--                 THIS IS IMPORTANT BECAUSE CURL USES LIBPSL TO PROTECT
+				--                 AGAINST HACKING ATTEMPTS RELATED TO COOKIES.
+				--                 DO NOT MERGE THIS BRANCH UNTIL THIS IS FIXED.
+
+				-- TODO: Add an option somehow so -j4 can be changed by the user. -j4 means multi-threaded build with four threads.
+				"cmake --build ../../build-curl/%{cfg.longname}/ --config %{cfg.longname} -j4",
+			}
+			filter { "configurations:Debug" }
+				buildoutputs { "../../build-curl/%{cfg.longname}/lib/%{cfg.longname}/libcurl-d.lib" }
+			filter { "configurations:Debug" }
+				buildoutputs { "../../build-curl/%{cfg.longname}/lib/%{cfg.longname}/libcurl.lib" }
+		else
+			error("Action not supported")
+		end
 
 	project "CruelerThanDAT"
 		-- For this project, WindowedApp might make more sense. Note there's no difference
@@ -62,6 +96,15 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 			"gmake" == _ACTION or
 			"gmakelegacy" == _ACTION) then
 			toolset "clang"
+			linkoptions { "-fuse-ld=lld" }
+			libdirs {
+				-- We can put this in a filter if we wanna link the debug build
+				-- of libfbxsdk for the debug configuration.
+				path.join(fbx,		"lib/x64/release/"),
+				path.join(directx,	"Lib/x64/"),
+
+				"build-curl/%{cfg.longname}/lib/",
+			}
 		elseif (
 			"vs2022" == _ACTION or
 			"vs2019" == _ACTION or
@@ -73,6 +116,14 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 			"vs2008" == _ACTION or
 			"vs2005" == _ACTION) then
 			toolset "msc"
+			libdirs {
+				-- We can put this in a filter if we wanna link the debug build
+				-- of libfbxsdk for the debug configuration.
+				path.join(fbx,		"lib/x64/release/"),
+				path.join(directx,	"Lib/x64/"),
+
+				"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
+			}
 		else
 			error("Action not supported")
 		end
@@ -81,41 +132,15 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 			"mLefttChild=mLeftChild", -- Fix typo in the FBX SDK from our end with macros.
 		}
 
-		-- This resolves to a better post build command than the original file, as Premake will
-		-- make it check that Assets exists before the copy command. Also this is cross platform
-		-- which is always nice, but for this project we don't care about that part.
 		postbuildcommands {
 			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"'
 		}
 
-		-- Ideally you'd wanna have a separate folder for headers, and place it here.
 		includedirs {
 			path.join(directx,	"Include/"),
 			path.join(fbx,		"include/"),
-			path.join(curl,		"include/"),
-		}
 
-		libdirs {
-			-- We can put this in a filter if we wanna link the debug build
-			-- of libfbxsdk for the debug configuration.
-			path.join(fbx,		"lib/x64/release/"),
-
-			path.join(directx,	"Lib/x64/"),
-			path.join(curl,		"lib/"),
-		}
-
-		links {
-			"urlmon",
-			"wldap32",
-			"advapi32",
-			"crypt32",
-			"normaliz",
-			"ws2_32",
-
-			"d3dx9d",
-			"d3d9",
-			"libfbxsdk",
-			"libcurl_a", -- Not sure why but when *I* built libcurl, the file came out as libcurl_a.lib, not libcurl.lib.
+			"depends/curl/include/"
 		}
 
 		files {
@@ -126,3 +151,35 @@ workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 			-- TODO: Filter this to add it to VS but not Make
 			--"CruelerThanDAT/**.rc",
 		}
+
+		filter { "configurations:Debug" }
+			links {
+				"urlmon",
+				"wldap32",
+				"advapi32",
+				"crypt32",
+				"normaliz",
+				"ws2_32",
+				"comdlg32",
+
+				"d3dx9d",
+				"d3d9",
+				"libfbxsdk",
+				"libcurl-d",
+			}
+		
+		filter { "configurations:Release" }
+			links {
+				"urlmon",
+				"wldap32",
+				"advapi32",
+				"crypt32",
+				"normaliz",
+				"ws2_32",
+				"comdlg32",
+
+				"d3dx9d",
+				"d3d9",
+				"libfbxsdk",
+				"libcurl",
+			}
