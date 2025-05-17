@@ -27,6 +27,7 @@ end
 workspace "CruelerThanDAT" -- Visual Studio SLN equivalent.
 	language "C++"
 	cppdialect "C++20"
+	systemversion "latest"
 
 	-- I'm not sure how to add x86 support, but I'm not gonna look into it and I'll leave it at x64 only
 	-- because nobody is running an x86 machine anyway, and supporting both can present difficulties with
