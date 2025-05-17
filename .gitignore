@@ -9,6 +9,7 @@
 *.make
 Makefile
 build-*/
+.vscode/
 
 # User-specific files
 *.rsuser
