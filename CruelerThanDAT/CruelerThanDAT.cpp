@@ -478,7 +478,7 @@ void RenderFrame() {
         if (ImGui::Button("Update")) {
             SHOULD_UPDATE = false;
             URLDownloadToFileA(NULL, downloadURL.c_str(), "update.zip", NULL, NULL);
-            ShellExecute(NULL, L"open", L"update.bat", NULL, NULL, SW_SHOWNORMAL);
+            ShellExecuteW(NULL, L"open", L"update.bat", NULL, NULL, SW_SHOWNORMAL);
             exit(0);
 
         }
@@ -935,10 +935,10 @@ int main(int argc, char* argv[])
     themeManager->ChooseStyle(1);
 
     LPDIRECT3DTEXTURE9 pTexture;
-    HRESULT hr = D3DXCreateTextureFromFile(g_pd3dDevice, L"Assets/img.dds", &pTexture);
+    HRESULT hr = D3DXCreateTextureFromFileW(g_pd3dDevice, L"Assets/img.dds", &pTexture);
 
     if (FAILED(hr)) {
-        MessageBox(0, L"Failed to load texture!", L"Error", MB_OK);
+        MessageBoxW(0, L"Failed to load texture!", L"Error", MB_OK);
         
     }
 
