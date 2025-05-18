@@ -136,14 +136,14 @@ struct Data3Entry {
 struct UIDData3 {
 	std::vector<char> data;
 	Data3Header d3Header;
-	void Read(BinaryReader& br, int size) {
-		uint32_t firstOffset = br.ReadUINT32();
-		uint32_t entriesCount = (firstOffset - br.Tell()) / 32;
+	void Read(BinaryReader& br) {
+		br.Skip(sizeof(uint32_t)); // TODO: firstOffset
+		// TODO: Will this be used eventually? uint32_t entriesCount = (firstOffset - br.Tell()) / 32;
 		d3Header.Read(br);
 	}
 
 	void Write(BinaryWriter* bw) {
-		
+		(void)bw;
 	}
 
 };
@@ -553,7 +553,7 @@ struct UIDEntry1 {
 		}
 		if (data3Offset != 0) {
 			reader.Seek(data3Offset);
-			data3.Read(reader, offsetSizes[data3Offset]);
+			data3.Read(reader); // NOTE: offsetSizes[data3Offset] went unused
 		}
 	}
 
@@ -610,7 +610,7 @@ struct UIDEntry3 {
 		u10 = br.ReadUINT32();
 		u11 = br.ReadUINT32();
 		u12 = br.ReadUINT32();
-		u13 = br.ReadFloat();
+		u13 = br.ReadFloat(); // TODO: What???
 	}
 
 	void Write(BinaryWriter* bw) {

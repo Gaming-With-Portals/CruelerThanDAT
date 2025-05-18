@@ -130,6 +130,7 @@ workspace "CruelerThanDAT"
 
 		defines {
 			"mLefttChild=mLeftChild", -- Fix typo in the FBX SDK from our end with macros.
+			"UNICODE",
 		}
 
 		postbuildcommands {
@@ -164,6 +165,10 @@ workspace "CruelerThanDAT"
 			--"CruelerThanDAT/**.rc",
 		}
 
+		filter { "toolset:clang" }
+			buildoptions "-Wall"
+		filter { "toolset:msc" }
+			warnings "High"
 		filter { "files:depends/imgui/**.cpp", "toolset:clang" }
 			buildoptions "-Wno-everything"
 		filter { "files:depends/imgui/**.cpp", "toolset:msc" }

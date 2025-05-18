@@ -186,7 +186,7 @@ public:
         return offset >= data.size();
     }
 
-    unsigned int Tell() {
+    size_t Tell() {
         return offset;
     }
 
@@ -195,9 +195,14 @@ public:
         offset = 0;
     }
 
-    void Seek(int position) {
+    void Seek(size_t position) {
         offset = position;
     }
+
+    void Skip(size_t position) {
+        offset += position;
+    }
+
     void SetEndianess(bool isBig) {
         isBigEndian = isBig;
     }
@@ -215,8 +220,8 @@ private:
     // Function to reverse the endian-ness (for big-endian <-> little-endian conversion)
     template <typename T>
     T ReverseEndian(T value) {
-        char* data = reinterpret_cast<char*>(&value);
-        std::reverse(data, data + sizeof(T));
+        char* ptr = reinterpret_cast<char*>(&value);
+        std::reverse(ptr, ptr + sizeof(T));
         return value;
     }
 };
@@ -316,7 +321,7 @@ public:
         return offset >= data.size();
     }
 
-    unsigned int Tell() {
+    size_t Tell() {
         return offset;
     }
 
@@ -325,7 +330,7 @@ public:
         offset = 0;
     }
 
-    void Seek(int position) {
+    void Seek(size_t position) {
         offset = position;
     }
     void SetEndianess(bool isBig) {

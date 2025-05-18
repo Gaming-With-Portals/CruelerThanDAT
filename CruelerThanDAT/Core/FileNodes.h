@@ -104,7 +104,7 @@ public:
 	std::vector<FileNode*> children;
 	std::vector<char> fileData;
 	FileNodeTypes nodeType;
-	const wchar_t* fileFilter = L"All Files(*.*)\0*.*;\0";
+	LPCWSTR fileFilter = L"All Files(*.*)\0*.*;\0";
 	bool loadFailed = false;
 	bool isEdited = false;
 
@@ -131,16 +131,17 @@ public:
 	virtual void ExportFile() {
 		OPENFILENAME ofn;
 		wchar_t szFile[260] = { 0 };
+		LPWSTR pFile = szFile;
 
-		mbstowcs_s(0, szFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
+		mbstowcs_s(0, pFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
 
 		ZeroMemory(&ofn, sizeof(OPENFILENAME));
 
-		ofn.lpstrFile = reinterpret_cast<LPWSTR>(szFile); // TODO: Make szFile be LPWSTR
+		ofn.lpstrFile = pFile;
 		ofn.lStructSize = sizeof(OPENFILENAME);
 		ofn.hwndOwner = NULL;
 		ofn.nMaxFile = 260;
-		ofn.lpstrFilter = reinterpret_cast<LPCWSTR>(fileFilter); // TODO: Make fileFilter be LPCWSTR
+		ofn.lpstrFilter = fileFilter;
 
 		ofn.nFilterIndex = 1;
 		ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
@@ -164,16 +165,17 @@ public:
 	virtual void ReplaceFile() {
 		OPENFILENAME ofn;
 		wchar_t szFile[260] = { 0 };
+		LPWSTR pFile = szFile;
 
-		mbstowcs_s(0, szFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
+		mbstowcs_s(0, pFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
 
 		ZeroMemory(&ofn, sizeof(OPENFILENAME));
 
-		ofn.lpstrFile = reinterpret_cast<LPWSTR>(szFile); // TODO: Make szFile be LPWSTR
+		ofn.lpstrFile = pFile;
 		ofn.lStructSize = sizeof(OPENFILENAME);
 		ofn.hwndOwner = NULL;
 		ofn.nMaxFile = 260;
-		ofn.lpstrFilter = reinterpret_cast<LPCWSTR>(fileFilter); // TODO: Make fileFilter be LPCWSTR
+		ofn.lpstrFilter = fileFilter;
 
 		ofn.nFilterIndex = 1;
 		ofn.Flags = OFN_PATHMUSTEXIST;
@@ -373,7 +375,7 @@ public:
 			node.offset = reader.ReadUINT32();
 			node.count = reader.ReadUINT32();
 
-			int pos = reader.Tell();
+			size_t pos = reader.Tell();
 			reader.Seek(node.offset);
 			for (int y = 0; y < node.count; y++) {
 				LY2Instance instance = LY2Instance();
@@ -417,17 +419,17 @@ public:
 		writer->WriteString("LY2");
 		writer->WriteByteZero();
 		writer->WriteINT32(4);
-		writer->WriteUINT32(nodes.size());
+		writer->WriteUINT32(static_cast<uint32_t>(nodes.size()));
 
 		int extradataoffset = 20;
 		int mainchunkend = 20;
 		for (LY2Node& node : nodes) {
-			extradataoffset += (20 + (40 * node.instances.size()));
+			extradataoffset += (20 + (40 * static_cast<int>(node.instances.size())));
 			mainchunkend += 20;
 
 		}
 		writer->WriteUINT32(extradataoffset);
-		writer->WriteUINT32(extradata.size());
+		writer->WriteUINT32(static_cast<uint32_t>(extradata.size()));
 		int offset = 0;
 		for (LY2Node& node : nodes) {
 			writer->WriteUINT32(node.flag_a);
@@ -435,8 +437,8 @@ public:
 			writer->WriteString(node.prop_category);
 			writer->WriteUINT16(node.prop_id);
 			writer->WriteUINT32(mainchunkend + offset);
-			writer->WriteUINT32(node.instances.size());
-			offset += 40 * node.instances.size();
+			writer->WriteUINT32(static_cast<uint32_t>(node.instances.size()));
+			offset += 40 * static_cast<int>(node.instances.size());
 		}
 		for (LY2Node& node : nodes) {
 			for (LY2Instance& inst : node.instances) {
@@ -500,7 +502,7 @@ public:
 					isEdited = true;
 					std::string hexStr(input_id + 2, 4);
 					LY2Node node = LY2Node();
-					node.prop_id = std::stoi(hexStr, nullptr, 16);
+					node.prop_id = static_cast<unsigned short>(std::stoi(hexStr, nullptr, 16));
 					node.prop_category = std::string(input_id, 2);
 					node.instances.push_back(LY2Instance());
 					nodes.push_back(node);
@@ -528,18 +530,18 @@ public:
 
 				if (ImGui::Button("Optimize Groups")) {
 					// Basically, every group with equal IDs and flags can be combined into one.
-					for (size_t i = 0; i < nodes.size(); ++i) {
-						if (nodes[i].instances.empty()) continue;
+					for (size_t j = 0; j < nodes.size(); ++j) {
+						if (nodes[j].instances.empty()) continue;
 
-						for (size_t j = i + 1; j < nodes.size(); ++j) {
-							if (nodes[j].flag_a == nodes[i].flag_a &&
-								nodes[j].flag_b == nodes[i].flag_b &&
-								nodes[j].prop_id == nodes[i].prop_id &&
-								nodes[j].prop_category == nodes[i].prop_category) {
+						for (size_t k = j + 1; k < nodes.size(); ++k) {
+							if (nodes[k].flag_a == nodes[j].flag_a &&
+								nodes[k].flag_b == nodes[j].flag_b &&
+								nodes[k].prop_id == nodes[j].prop_id &&
+								nodes[k].prop_category == nodes[j].prop_category) {
 
-								nodes[i].instances.insert(nodes[i].instances.end(), nodes[j].instances.begin(), nodes[j].instances.end());
+								nodes[j].instances.insert(nodes[j].instances.end(), nodes[k].instances.begin(), nodes[k].instances.end());
 
-								nodes[j].instances.clear();
+								nodes[k].instances.clear();
 							}
 						}
 					}
@@ -590,7 +592,7 @@ public:
 			if (endOffset == 0)
 				endOffset = uidHeader.offset3;
 			if (endOffset == 0)
-				endOffset = reader.GetSize();
+				endOffset = static_cast<int>(reader.GetSize());
 
 			std::vector<int> allOffsets;
 			for (UIDEntry1& entry : UIDEntry1List) {
@@ -648,9 +650,9 @@ public:
 
 		BinaryWriter* writer = new BinaryWriter(fileIsBigEndian);
 		UIDHeader header;
-		header.size1 = UIDEntry1List.size();
-		header.size2 = UIDEntry2List.size();
-		header.size3 = UIDEntry3List.size();
+		header.size1 = static_cast<int>(UIDEntry1List.size());
+		header.size2 = static_cast<int>(UIDEntry2List.size());
+		header.size3 = static_cast<int>(UIDEntry3List.size());
 		header.u0 = uidHeader.u0;
 		header.u1 = uidHeader.u1;
 		header.frameLength = uidHeader.frameLength;
@@ -663,25 +665,25 @@ public:
 
 		
 		std::vector<int> dataPositions;
-		int pointer = 36 + (432 * UIDEntry1List.size());
+		int pointer = 36 + (432 * static_cast<int>(UIDEntry1List.size()));
 		for (UIDEntry1& uid : UIDEntry1List) {
 			if (uid.data1.data.size() > 0) {
 				dataPositions.push_back(pointer);
-				pointer += uid.data1.data.size();
+				pointer += static_cast<int>(uid.data1.data.size());
 			}
 			else {
 				dataPositions.push_back(0);
 			}
 			if (uid.data2.data.size() > 0) {
 				dataPositions.push_back(pointer);
-				pointer += uid.data2.data.size();
+				pointer += static_cast<int>(uid.data2.data.size());
 			}
 			else {
 				dataPositions.push_back(0);
 			}
 			if (uid.data3.data.size() > 0) {
 				dataPositions.push_back(pointer);
-				pointer += uid.data3.data.size();
+				pointer += static_cast<int>(uid.data3.data.size());
 			}
 			else {
 				dataPositions.push_back(0);
@@ -692,7 +694,7 @@ public:
 
 
 		header.offset2 = pointer;
-		header.offset3 = header.offset2 + (sizeof(UIDEntry2) * UIDEntry2List.size());
+		header.offset3 = header.offset2 + (sizeof(UIDEntry2) * static_cast<int>(UIDEntry2List.size()));
 
 		header.Write(writer);
 		int i = 0;
@@ -843,10 +845,10 @@ public:
 		uint32_t entriesCount = reader.ReadUINT32();
 		uint32_t entriesOffset = reader.ReadUINT32();
 		uint32_t texturesOffset = reader.ReadUINT32();
-		uint32_t textureCount = (reader.GetSize() - texturesOffset) / 36;
+		uint32_t textureCount = (static_cast<uint32_t>(reader.GetSize()) - texturesOffset) / 36;
 
 		reader.Seek(texturesOffset);
-		for (int a = 0; a < textureCount; a++) {
+		for (uint32_t a = 0; a < textureCount; a++) {
 			UvdTexture texture = UvdTexture();
 			texture.name = reader.ReadString(32);
 			texture.id = reader.ReadUINT32();
@@ -854,7 +856,7 @@ public:
 		}
 
 		reader.Seek(entriesOffset);
-		for (int a = 0; a < entriesCount; a++) {
+		for (uint32_t a = 0; a < entriesCount; a++) {
 			UvdEntry texture = UvdEntry();
 			texture.Read(reader);
 			uvdEntries.push_back(texture);
@@ -1087,8 +1089,6 @@ public:
 		int attributeNumber = reader.ReadUINT16();
 		int dataIndex = reader.ReadUINT16();
 
-		int currentPos = reader.Tell();
-
 		reader.Seek(dataOffset + (dataIndex * 4)); // Seek to data position
 
 		int nameOffset = reader.ReadUINT16();
@@ -1140,7 +1140,7 @@ public:
 		reader.Seek(0x8);
 		int nodeCount = reader.ReadUINT16();
 		int dataCount = reader.ReadUINT16();
-		int dataSize = reader.ReadUINT32();
+		reader.Skip(sizeof(int)); // TODO: dataSize
 
 		infoOffset = 16;
 		dataOffset = 16 + 8 * nodeCount;
@@ -1187,7 +1187,7 @@ public:
 			int offsetTextureSizes = reader.ReadUINT32();
 			int offsetTextureFlags = reader.ReadUINT32();
 			int offsetTextureIdx = reader.ReadUINT32();
-			int offsetTextureInfo = reader.ReadUINT32();
+			reader.Skip(sizeof(int)); // TODO: offsetTextureInfo
 
 
 
@@ -1302,7 +1302,7 @@ public:
 
 		reader.Seek(header.offsetVertexGroups);
 		std::vector<WMBVertexGroup> vertexGroups;
-		for (int i = 0; i < header.numVertexGroups; i++) {
+		for (uint32_t i = 0; i < header.numVertexGroups; i++) {
 			WMBVertexGroup vtxGroup;
 			vtxGroup.Read(reader);
 			vertexGroups.push_back(vtxGroup);
@@ -1310,7 +1310,7 @@ public:
 
 		reader.Seek(header.offsetBatches);
 		std::vector<WMBBatch> batches;
-		for (int i = 0; i < header.numBatches; i++) {
+		for (uint32_t i = 0; i < header.numBatches; i++) {
 			WMBBatch itm;
 			itm.Read(reader);
 			batches.push_back(itm);
@@ -1321,7 +1321,7 @@ public:
 
 		reader.Seek(offsetBatchData);
 		std::vector<WMBBatchData> batchDatas;
-		for (int i = 0; i < header.numBatches; i++) {
+		for (uint32_t i = 0; i < header.numBatches; i++) {
 			WMBBatchData itm;
 			itm.Read(reader);
 			batchDatas.push_back(itm);
@@ -1329,7 +1329,7 @@ public:
 
 		reader.Seek(header.offsetMeshes);
 		std::vector<WMBMesh> meshes;
-		for (int i = 0; i < header.numMeshes; i++) {
+		for (uint32_t i = 0; i < header.numMeshes; i++) {
 			WMBMesh itm;
 			itm.Read(reader);
 			meshes.push_back(itm);
@@ -1337,7 +1337,7 @@ public:
 
 		reader.Seek(header.offsetTextures);
 		std::vector<WMBTexture> textures;
-		for (int i = 0; i < header.numTextures; i++) {
+		for (uint32_t i = 0; i < header.numTextures; i++) {
 			WMBTexture itm;
 			itm.Read(reader);
 			textures.push_back(itm);
@@ -1345,7 +1345,7 @@ public:
 
 
 		reader.Seek(header.offsetMaterials);
-		for (int i = 0; i < header.numMaterials; i++) {
+		for (uint32_t i = 0; i < header.numMaterials; i++) {
 			WMBMaterial mat;
 			mat.Read(reader);
 			size_t place = reader.Tell();
@@ -1355,7 +1355,7 @@ public:
 			cmat.shader_name = reader.ReadString(16);
 			reader.Seek(mat.offsetTextures);
 			std::vector<WMBTexture> textureMappings;
-			for (int i = 0; i < mat.numTextures; i++) {
+			for (int j = 0; j < mat.numTextures; j++) {
 				WMBTexture itm;
 				itm.Read(reader);
 				textureMappings.push_back(itm);
@@ -1379,7 +1379,7 @@ public:
 			ctdmesh->name = reader.ReadNullTerminatedString();
 			// Materials
 			reader.Seek(mesh.offsetMaterials);
-			for (int x = 0; x < mesh.numMaterials; x++) {
+			for (uint32_t x = 0; x < mesh.numMaterials; x++) {
 				ctdmesh->materials.push_back(&materials[reader.ReadUINT16()]);
 			}
 			std::vector<unsigned short> batchIDs;
@@ -1403,7 +1403,7 @@ public:
 
 				reader.Seek(activeVtxGroup.offsetIndexes + (sizeof(short) * activeBatch.indexStart));
 				std::vector<unsigned short> indices;
-				for (int x = 0; x < activeBatch.numIndices; x++) {
+				for (uint32_t x = 0; x < activeBatch.numIndices; x++) {
 					indices.push_back(reader.ReadUINT16());
 				}
 
@@ -1436,10 +1436,10 @@ public:
 
 					indices = newIndices;
 				}
-				ctdbatch->indexCount = indices.size(); 
+				ctdbatch->indexCount = static_cast<int>(indices.size());
 				ctdbatch->indexes = indices;
 
-				g_pd3dDevice->CreateIndexBuffer(indices.size() * sizeof(short), 0,
+				g_pd3dDevice->CreateIndexBuffer(static_cast<UINT>(indices.size()) * sizeof(short), 0,
 					D3DFMT_INDEX16, D3DPOOL_MANAGED,
 					&ctdbatch->indexBuffer, nullptr);
 				void* pIndexData = nullptr;
@@ -1456,7 +1456,7 @@ public:
 					ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
 					std::vector<WMBVertexA> vertexes;
-					for (int i = 0; i < activeBatch.numVertices; i++) {
+					for (uint32_t i = 0; i < activeBatch.numVertices; i++) {
 						WMBVertexA vtx;
 						vtx.Read(reader);
 						vertexes.push_back(vtx);
@@ -1480,7 +1480,10 @@ public:
 						D3DPOOL_DEFAULT, &ctdbatch->vertexBuffer, NULL);
 
 					void* pVertexData = nullptr;
-					HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+					const HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+					if (S_OK != hr) {
+						// TODO: Handle this
+					}
 					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 					ctdbatch->vertexBuffer->Unlock();
 					ctdbatch->vertexes = convertedVtx;
@@ -1494,7 +1497,7 @@ public:
 					ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
 					std::vector<WMBVertex65847> vertexes;
-					for (int i = 0; i < activeBatch.numVertices; i++) {
+					for (uint32_t i = 0; i < activeBatch.numVertices; i++) {
 						WMBVertex65847 vtx;
 						vtx.Read(reader);
 						vertexes.push_back(vtx);
@@ -1518,7 +1521,10 @@ public:
 						D3DPOOL_DEFAULT, &ctdbatch->vertexBuffer, NULL);
 
 					void* pVertexData = nullptr;
-					HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+					const HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+					if (S_OK != hr) {
+						// TODO: Handle this
+					}
 					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 					ctdbatch->vertexBuffer->Unlock();
 					ctdbatch->vertexes = convertedVtx;
@@ -1532,7 +1538,7 @@ public:
 
 				
 					std::vector<WMBVertex66311> vertexes;
-					for (int i = 0; i < activeBatch.numVertices; i++) {
+					for (uint32_t i = 0; i < activeBatch.numVertices; i++) {
 						WMBVertex66311 vtx;
 						vtx.Read(reader);
 						vertexes.push_back(vtx);
@@ -1559,7 +1565,10 @@ public:
 						D3DPOOL_DEFAULT, &ctdbatch->vertexBuffer, NULL);
 
 					void* pVertexData = nullptr;
-					HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+					const HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+					if (S_OK != hr) {
+						// TODO: Handle this
+					}
 					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 					ctdbatch->vertexBuffer->Unlock();
 					ctdbatch->vertexes = convertedVtx;
@@ -1574,7 +1583,7 @@ public:
 
 
 					std::vector<WMBVertex65799> vertexes;
-					for (int i = 0; i < activeBatch.numVertices; i++) {
+					for (uint32_t i = 0; i < activeBatch.numVertices; i++) {
 						WMBVertex65799 vtx;
 						vtx.Read(reader);
 						vertexes.push_back(vtx);
@@ -1602,7 +1611,10 @@ public:
 						D3DPOOL_DEFAULT, &ctdbatch->vertexBuffer, NULL);
 
 					void* pVertexData = nullptr;
-					HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+					const HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
+					if (S_OK != hr) {
+						// TODO: Handle this
+					}
 					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
 					ctdbatch->vertexBuffer->Unlock();
 					ctdbatch->vertexes = convertedVtx;
@@ -1682,13 +1694,13 @@ public:
 						lUVDiffuseElement->SetReferenceMode(FbxGeometryElement::eDirect);
 
 
-						mesh->InitControlPoints(batch->vertexes.size());
+						mesh->InitControlPoints(static_cast<int>(batch->vertexes.size()));
 						for (int i = 0; i < batch->vertexes.size(); i++) {
 							mesh->SetControlPointAt(FbxVector4(batch->vertexes[i].x, batch->vertexes[i].y, batch->vertexes[i].z), i);
 							lUVDiffuseElement->GetDirectArray().Add(FbxVector2(batch->vertexes[i].u, 1.0 - batch->vertexes[i].v));
 						}
 
-						lUVDiffuseElement->GetIndexArray().SetCount(batch->indexes.size());
+						lUVDiffuseElement->GetIndexArray().SetCount(static_cast<int>(batch->indexes.size()));
 
 						for (int i = 0; i < batch->indexes.size(); i+=3) {
 							mesh->BeginPolygon();
@@ -1876,7 +1888,7 @@ public:
 				size = meshes[i + 1].offset - meshes[i].offset;
 			}
 			else {
-				size = fileData.size() - meshes[i].offset;
+				size = static_cast<int>(fileData.size()) - meshes[i].offset;
 			}
 
 			WmbFileNode* node = new WmbFileNode(std::string(meshes[i].name));
@@ -1938,15 +1950,15 @@ public:
 		reader.Seek(0x8 + headerLength);
 		while (!reader.EndOfBuffer()) {
 			std::string chunkType = reader.ReadString(4);
-			int chunkSize = reader.ReadUINT32();
-			int nextChunkPosition = reader.Tell() + chunkSize;
+			size_t chunkSize = reader.ReadUINT32();
+			size_t nextChunkPosition = reader.Tell() + chunkSize;
 
 			if (chunkType == "DIDX") {
 				std::vector<int> wemIDs;
 				std::vector<int> wemOffsets;
 				std::vector<int> wemSizes;
 				if (chunkSize > 0) {
-					int wemCount = (chunkSize / 12);
+					int wemCount = static_cast<int>(chunkSize / 12);
 					for (int i = 0; i < wemCount; i++) {
 						wemIDs.push_back(reader.ReadUINT32());
 						wemOffsets.push_back(reader.ReadUINT32());
@@ -1954,7 +1966,7 @@ public:
 					}
 					reader.ReadUINT32();
 					reader.ReadUINT32();
-					int baseOffset = reader.Tell();
+					size_t baseOffset = reader.Tell();
 					// The DATA chunk *should* always be after DIDX, if it isn't uhhh... kick sand?
 
 					for (int i = 0; i < wemCount; i++) {
@@ -1970,12 +1982,12 @@ public:
 			}
 			if (chunkType == "HIRC") {
 				// Chunk lore
-				int children = reader.ReadUINT32();
-				for (int i = 0; i < children; i++) {
+				int childrenCount = reader.ReadUINT32();
+				for (int i = 0; i < childrenCount; i++) {
 					int flag = reader.ReadINT8();
 					int size = reader.ReadUINT32();
-					int nextHircChunkPosition = reader.Tell() + size;
-					int uid = reader.ReadUINT32();
+					size_t nextHircChunkPosition = reader.Tell() + size;
+					reader.Skip(sizeof(int)); // TODO: uid
 
 					if (flag == 0x4) {
 						
@@ -2075,21 +2087,21 @@ public:
 		reader.Seek(0x4);
 		unsigned int FileCount = reader.ReadUINT32();
 		unsigned int PositionsOffset = reader.ReadUINT32();
-		unsigned int ExtensionsOffset = reader.ReadUINT32();
+		reader.Skip(sizeof(unsigned int)); // TODO: ExtensionsOffset
 		unsigned int NamesOffset = reader.ReadUINT32();
 		unsigned int SizesOffset = reader.ReadUINT32();
-		unsigned int HashMapOffset = reader.ReadUINT32();
+		reader.Skip(sizeof(unsigned int)); // TODO: HashMapOffset
 
 		reader.Seek(PositionsOffset);
 		std::vector<int> offsets;
-		for (int f = 0; f < FileCount; f++) {
+		for (unsigned int f = 0; f < FileCount; f++) {
 			offsets.push_back(reader.ReadUINT32());
 		}
 
 		reader.Seek(NamesOffset);
 		int nameLength = reader.ReadUINT32();
 		std::vector<std::string> names;
-		for (int f = 0; f < FileCount; f++) {
+		for (unsigned int f = 0; f < FileCount; f++) {
 			std::string temp_name = reader.ReadString(nameLength);
 			temp_name.erase(std::remove(temp_name.begin(), temp_name.end(), '\0'), temp_name.end());
 			names.push_back(temp_name);
@@ -2097,11 +2109,11 @@ public:
 
 		reader.Seek(SizesOffset);
 		std::vector<int> sizes;
-		for (int f = 0; f < FileCount; f++) {
+		for (unsigned int f = 0; f < FileCount; f++) {
 			sizes.push_back(reader.ReadUINT32());
 		}
 
-		for (int f = 0; f < FileCount; f++) {
+		for (unsigned int f = 0; f < FileCount; f++) {
 			reader.Seek(offsets[f]);
 			FileNode* childNode = HelperFunction::LoadNode(names[f], reader.ReadBytes(sizes[f]), fileIsBigEndian, fileIsBigEndian);
 			if (childNode) {
@@ -2128,7 +2140,7 @@ public:
 		for (FileNode* child : children) {
 			child->SaveFile();
 			if (child->fileName.length() > longestName) {
-				longestName = child->fileName.length() + 1;
+				longestName = static_cast<int>(child->fileName.length() + 1);
 			}
 		}
 
@@ -2139,7 +2151,7 @@ public:
 			fileNames.push_back(node->fileName);
 		}
 
-		int shift = std::min(31, 32 - IntLength(fileNames.size()));
+		int shift = std::min(31, 32 - IntLength(static_cast<int>(fileNames.size())));
 		int bucketSize = 1 << (31 - shift);
 
 		std::vector<short> bucketTable(bucketSize, -1);
@@ -2176,12 +2188,12 @@ public:
 			hashData.Indices.push_back(tuple.second);
 		}
 
-		hashData.StructSize = 4 + 2 * bucketTable.size() + 4 * hashTuple.size() + 2 * hashTuple.size();
+		hashData.StructSize = static_cast<int>(4 + 2 * bucketTable.size() + 4 * hashTuple.size() + 2 * hashTuple.size());
 
 		BinaryWriter* writer = new BinaryWriter();
 		writer->WriteString("DAT");
 		writer->WriteByteZero();
-		int fileCount = children.size();
+		int fileCount = static_cast<int>(children.size());
 
 		int positionsOffset = 0x20;
 		int extensionsOffset = positionsOffset + 4 * fileCount;
@@ -2198,6 +2210,7 @@ public:
 		writer->WriteUINT32(0);
 
 		for (FileNode* child : children) {
+			(void)child; // TODO: If child isn't gonna be used in a future patch, remove it entirely instead of discarding.
 			writer->WriteUINT32(0);
 		}
 
@@ -2218,14 +2231,14 @@ public:
 
 
 		for (FileNode* child : children) {
-			writer->WriteUINT32(child->fileData.size());
+			writer->WriteUINT32(static_cast<uint32_t>(child->fileData.size()));
 		}
 
 		// Prepare for hash writing
 		writer->WriteUINT32(hashData.Shift);
 		writer->WriteUINT32(16);
-		writer->WriteUINT32(16 + hashData.Offsets.size() * 2);
-		writer->WriteUINT32(16 + hashData.Offsets.size() * 2 + hashData.Hashes.size() * 4);
+		writer->WriteUINT32(16 + static_cast<uint32_t>(hashData.Offsets.size()) * 2);
+		writer->WriteUINT32(16 + static_cast<uint32_t>(hashData.Offsets.size()) * 2 + static_cast<uint32_t>(hashData.Hashes.size()) * 4);
 
 		for (int i = 0; i < hashData.Offsets.size(); i++)
 			writer->WriteINT16(hashData.Offsets[i]);
@@ -2238,16 +2251,17 @@ public:
 
 		std::vector<int> offsets;
 		for (FileNode* child : children) {
+			(void)child; // TODO: If child isn't gonna be used in a future patch, remove it entirely instead of discarding.
 
-			int targetPosition = HelperFunction::Align(writer->Tell(), 1024);
-			int padding = targetPosition - writer->GetData().size();
-			if (padding > 0) {
+			int targetPosition = HelperFunction::Align(static_cast<int>(writer->Tell()), 1024);
+			int padding = targetPosition - static_cast<int>(writer->GetData().size());
+			if (padding > 0) { // TODO: Replace this with an skip function
 				std::vector<char> zeroPadding(padding, 0);
 				writer->WriteBytes(zeroPadding);
 			}
 
 
-			offsets.push_back(writer->Tell());
+			offsets.push_back(static_cast<int>(writer->Tell()));
 			writer->WriteBytes(child->fileData);
 
 		}
