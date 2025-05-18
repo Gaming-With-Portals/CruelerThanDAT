@@ -18,10 +18,33 @@
 - Game-link
 - Keyboard controls for WMB viewing
 
-### Build requirements:
-- DirectX Legacy SDK (2010)
-    - The DXSDK_DIR environment variable should be set. The installer for the SDK will do it for you usually, if it doesn't set it to the path containing the Include and Lib folders.
-- libcurl (static, MSVC, headers)
-    - The FBXSDK_DIR environment variable should be set manually. Set it to the path containing the include and lib folders.
-- FBX SDK
-    - The CURL_DIR environment variable should be set manually. Set it to the path containing the include and lib folders.
+## Building From Source
+### With Visual Studio
+#### Requirements
+- [DirectX Legacy SDK (2010)](https://www.microsoft.com/en-us/download/details.aspx?id=6812): The DXSDK_DIR environment variable will be created by the installer automatically, but if something goes wrong with that part, compilation will fail and you'll have to set it manually.
+- [FBX SDK](https://aps.autodesk.com/developer/overview/fbx-sdk): The FBXSDK_DIR environment variable should be set manually. Set it to the path containing the include and lib folders.
+- [Perl](https://learn.perl.org/installing/windows.html): The [Chocolatey package](https://community.chocolatey.org/packages/StrawberryPerl) is recommended due to ease of installation.
+- [Visual Studio 2022](https://visualstudio.microsoft.com/) with the C++ toolset (Older versions may or may not be supported at a later date)
+- [CMake](https://cmake.org/): The [Chocolatey package](https://community.chocolatey.org/packages/cmake) is recommmended due to ease of installation.
+
+#### Instructions
+1. Clone the repository recursively. If using git from a terminal, run `git clone --recursive https://github.com/ChloeZamorano/CruelerThanDAT`. Cloning recursively will ensure the cURL submodule won't be missing.
+2. Run the command `premake5 vs2022` in the root folder of the repository. This will generate project files for Visual Studio 2022, including the cURL dependency and CruelerThanDAT itself.
+3. Upon opening the generated Visual Studio solution file, you may open it normally like any other and compile a debug or release build by pressing F7.
+
+### With GNU Make
+#### Requirements
+- [DirectX Legacy SDK (2010)](https://www.microsoft.com/en-us/download/details.aspx?id=6812): The DXSDK_DIR environment variable will be created by the installer automatically, but if something goes wrong with that part, compilation will fail and you'll have to set it manually.
+- [FBX SDK](https://aps.autodesk.com/developer/overview/fbx-sdk): The FBXSDK_DIR environment variable should be set manually. Set it to the path containing the include and lib folders.
+- [Perl](https://learn.perl.org/installing/windows.html): The [Chocolatey package](https://community.chocolatey.org/packages/StrawberryPerl) is recommended due to ease of installation.
+- [CMake](https://cmake.org/): The [Chocolatey package](https://community.chocolatey.org/packages/cmake) is recommmended due to ease of installation.
+- [GNU Make](https://www.gnu.org/software/make/): The [Chocolatey package](https://community.chocolatey.org/packages/make) is recommmended due to ease of installation.
+- [LLVM](https://llvm.org/): For the Clang compiler specifically. The [Chocolatey package](https://community.chocolatey.org/packages/llvm) is recommmended due to ease of installation.
+
+#### Instructions
+1. Clone the repository recursively. If using git from a terminal, run `git clone --recursive https://github.com/ChloeZamorano/CruelerThanDAT`. Cloning recursively will ensure the cURL submodule won't be missing.
+2. Run the command `premake5 gmake` in the root folder of the repository. This will generate project files for GNU Make, including the cURL dependency and CruelerThanDAT itself.
+3. Compile with GNU Make:
+    - To compile cURL, run `make config=debug cURL`, where `debug` can be replaced with `release`, and the `-j` option may be specified for faster build times; for example `-j4` to use 4 threads, or any desired amount.
+    - To compile CruelerThanDAT, run `make config=debug CruelerThanDAT`. Note this will fail if you don't compile cURL first.
+    - To compile everything, run `make config=debug all`. This will compile cURL and then CruelerThanDAT in that order the same as the above commands.
