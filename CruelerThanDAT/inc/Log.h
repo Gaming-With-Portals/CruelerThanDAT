@@ -2,7 +2,7 @@
 #include "string"
 #include "vector"
 #include <imgui.h>
-#include "../Assets/CodIcons.h"
+#include "CodIcons.h"
 
 namespace CTDLog {
 

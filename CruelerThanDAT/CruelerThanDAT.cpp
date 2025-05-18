@@ -9,18 +9,18 @@
 #include "imgui_impl_win32.h"
 #include <iostream>
 #include "globals.h"
-#include "Core/FileNodes.h"
+#include "FileNodes.h"
 #include <vector>
 #include <fstream>
 #include <memory>
-#include "Assets/CodIcons.h"
+#include "CodIcons.h"
 #include <shellapi.h>
 #include <chrono>
-#include "Core/Log.h"
-#include "Themes/themeLoader.h"
-#include "Core/Utility/BasicShaders.h"
-#include "Core/Utility/FileUtils.h"
-#include "Core/CTDSettings.h"
+#include "Log.h"
+#include "themeLoader.h"
+#include "BasicShaders.h"
+#include "FileUtils.h"
+#include "CTDSettings.h"
 #include "curl/curl.h"
 #include "json.hpp"
 

@@ -48,6 +48,19 @@ workspace "CruelerThanDAT"
 			"gmakelegacy" == _ACTION) then
 			toolset "clang"
 			linkoptions { "-fuse-ld=lld" }
+
+			files {
+				"CruelerThanDAT/CruelerThanDAT.cpp",
+				"CruelerThanDAT/src/**.cpp",
+				"CruelerThanDAT/inc/**.hpp",
+				"CruelerThanDAT/inc/**.h",
+
+				"depends/imgui/src/**.cpp",
+				"depends/imgui/inc/**.h",
+				"depends/imstb/**.h",
+				"depends/json/**.hpp",
+			}
+
 			libdirs {
 				-- We can put this in a filter if we wanna link the debug build
 				-- of libfbxsdk for the debug configuration.
@@ -75,6 +88,19 @@ workspace "CruelerThanDAT"
 
 				"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 			}
+
+			files {
+				"CruelerThanDAT/CruelerThanDAT.cpp",
+				"CruelerThanDAT/src/**.cpp",
+				"CruelerThanDAT/inc/**.hpp",
+				"CruelerThanDAT/inc/**.h",
+				"CruelerThanDAT/**.rc", -- TODO: Remove RC files and do it the standard way
+	
+				"depends/imgui/src/**.cpp",
+				"depends/imgui/inc/**.h",
+				"depends/imstb/**.h",
+				"depends/json/**.hpp",
+			}
 		else
 			error("Action not supported")
 		end
@@ -85,13 +111,13 @@ workspace "CruelerThanDAT"
 		}
 
 		postbuildcommands {
+			'{COPYFILE} "%{prj.location}/libfbxsdk.dll" "%{cfg.buildtarget.directory}/libfbxsdk.dll"',
 			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
-			'{COPY} "depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
-			'{COPY} "libfbxsdk.dll" "%{cfg.buildtarget.directory}/libfbxsdk.dll',
+			'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
 		}
 
 		includedirs {
-
+			"CruelerThanDAT/inc/",
 		}
 
 		externalincludedirs {
@@ -102,20 +128,6 @@ workspace "CruelerThanDAT"
 			"depends/imgui/inc/",
 			"depends/imstb/",
 			"depends/json/",
-		}
-
-		files {
-			"CruelerThanDAT/**.cpp",
-			"CruelerThanDAT/**.hpp",
-			"CruelerThanDAT/**.h",
-
-			"depends/imgui/src/**.cpp",
-			"depends/imgui/inc/**.h",
-			"depends/imstb/**.h",
-			"depends/json/**.hpp",
-
-			-- TODO: Filter this to add it to VS but not Make
-			--"CruelerThanDAT/**.rc",
 		}
 
 		filter { "toolset:clang" }

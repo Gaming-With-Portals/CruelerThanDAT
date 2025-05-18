@@ -1,6 +1,6 @@
 #pragma once
 #include "BinaryHandler.h"
-#include "Utility/FileUtils.h"
+#include "FileUtils.h"
 #include <fstream>
 #include <vector>
 
