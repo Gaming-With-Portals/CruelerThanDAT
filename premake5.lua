@@ -135,6 +135,7 @@ workspace "CruelerThanDAT"
 
 		postbuildcommands {
 			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"'
+			'{COPY} "depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"'
 		}
 
 		includedirs {
