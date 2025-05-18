@@ -38,8 +38,19 @@ static D3DPRESENT_PARAMETERS    g_d3dpp = {};
 static LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
 static LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
 
-static D3DXMATRIX viewMatrix;
+LPDIRECT3DTEXTURE9 g_RenderTargetTexture = nullptr;
+LPDIRECT3DSURFACE9 g_RenderTargetSurface = nullptr;
+
+// TODO: Delete
 static D3DXMATRIX projMatrix;
+
+float yaw = 0.0f;
+float pitch = 0.0f;
+float radius = 10.0f;
+
+D3DXVECTOR3 target = D3DXVECTOR3(0, 0, 0);
+D3DXVECTOR3 cameraPos;
+D3DXMATRIX view;
 
 static CTDSettings appConfig;
 
@@ -175,6 +186,14 @@ namespace HelperFunction {
 
 		return outputFile;
 	}
+}
+
+void CreateViewportRT(int width, int height)
+{
+    g_pd3dDevice->CreateTexture(width, height, 1, D3DUSAGE_RENDERTARGET,
+        D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &g_RenderTargetTexture, NULL);
+
+    g_RenderTargetTexture->GetSurfaceLevel(0, &g_RenderTargetSurface);
 }
 
 FileNode* FileNodeFromFilepath(std::string filePath) {
@@ -356,34 +375,82 @@ void SelfUpdate() {
 
 	
 }
-
+int lastMouseX = 0;
+int lastMouseY = 0;
+bool isDragging = false;
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
 		return true;
 
-	switch (msg)
-	{
-	case WM_SIZE:
-		if (wParam == SIZE_MINIMIZED)
-			return 0;
-		g_ResizeWidth = (UINT)LOWORD(lParam); // Queue resize
-		g_ResizeHeight = (UINT)HIWORD(lParam);
-		return 0;
-	case WM_SYSCOMMAND:
-		if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
-			return 0;
-		break;
-	case WM_DESTROY:
-		::PostQuitMessage(0);
-		return 0;
-	case WM_CREATE:
-		DragAcceptFiles(hWnd, TRUE);  // Enable drag-and-drop
-		break;
-	case WM_DROPFILES: {
-		HDROP hDrop = (HDROP)wParam;
-		wchar_t filePath[MAX_PATH] = { 0 };
+    switch (msg)
+    {
+    case WM_LBUTTONDOWN:
+    {
+        isDragging = true;
+        lastMouseX = LOWORD(lParam);
+        lastMouseY = HIWORD(lParam);
+        SetCapture(hWnd); // lock mouse input to window
+        break;
+    }
+
+    case WM_LBUTTONUP:
+    {
+        isDragging = false;
+        ReleaseCapture();
+        break;
+    }
+
+    case WM_MOUSEMOVE:
+    {
+        if (isDragging)
+        {
+            int x = LOWORD(lParam);
+            int y = HIWORD(lParam);
+
+            int dx = x - lastMouseX;
+            int dy = y - lastMouseY;
+
+            lastMouseX = x;
+            lastMouseY = y;
+
+            float sensitivity = 0.01f;
+            yaw += dx * sensitivity;
+            pitch += dy * sensitivity;
+        }
+        break;
+    }
+    case WM_MOUSEWHEEL:
+    {
+        short delta = GET_WHEEL_DELTA_WPARAM(wParam); // +120 or -120
+        float scrollSpeed = 5.0f; // tweak for sensitivity
+        radius -= (delta / 120.0f) * scrollSpeed;
+
+
+        radius = std::max(2.0f, std::min(1000.0f, radius));
+        break;
+    }
+
+    case WM_SIZE:
+        if (wParam == SIZE_MINIMIZED)
+            return 0;
+        g_ResizeWidth = (UINT)LOWORD(lParam); // Queue resize
+        g_ResizeHeight = (UINT)HIWORD(lParam);
+        return 0;
+    case WM_SYSCOMMAND:
+        if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
+            return 0;
+        break;
+    case WM_DESTROY:
+        ::PostQuitMessage(0);
+        return 0;
+    case WM_CREATE:
+        DragAcceptFiles(hWnd, TRUE);  // Enable drag-and-drop
+        break;
+    case WM_DROPFILES: {
+        HDROP hDrop = (HDROP)wParam;
+        wchar_t filePath[MAX_PATH] = { 0 };
 
 		// Get the first dropped file (you can loop for multiple files)
 		if (DragQueryFileW(hDrop, 0, filePath, MAX_PATH)) {
@@ -461,16 +528,19 @@ void ResetDevice()
 
 
 void RenderFrame() {
-	static float fov = 20.0f;
-	static float index = 180.0f;    // an ever-increasing float value
-	static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
-	static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
-	static bool spinModel = false;
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+
+
+
+    static float fov = 50.0f;
+    static float index = 180.0f;  
+    //static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
+    static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
+    static bool spinModel = false;
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
 
 	// Start the ImGui frame
 	ImGui_ImplDX9_NewFrame();
@@ -580,7 +650,14 @@ void RenderFrame() {
 
 	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
-
+    if (g_RenderTargetSurface == nullptr || g_RenderTargetTexture == nullptr) {
+        CreateViewportRT(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+    }
+    LPDIRECT3DSURFACE9 g_OriginalBackBuffer = nullptr;
+    g_pd3dDevice->GetRenderTarget(0, &g_OriginalBackBuffer);
+    g_pd3dDevice->SetRenderTarget(0, g_RenderTargetSurface);
+    g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
+        D3DCOLOR_XRGB(50, 50, 50), 1.0f, 0);
 
 	if (FileNode::selectedNode) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
@@ -668,22 +745,12 @@ void RenderFrame() {
 					}
 				}
 
-				if (ImGui::BeginTabItem("Visualizer")) {
-					ImGui::SetNextItemWidth(120.0f);
-					ImGui::SliderFloat("FOV", &fov, 20.0f, 100.0f);
-					ImGui::SetNextItemWidth(120.0f);
-					ImGui::SliderFloat("Rotation", &index, 0.0f, 360.0f);
-					ImGui::Checkbox("Spin Model?", &spinModel);
-
-					ImGui::SetNextItemWidth(120.0f);
-					ImGui::DragFloat("Orbit Height", &cameraPos[1], 0.1f);
-					ImGui::SetNextItemWidth(120.0f);
-					ImGui::DragFloat("Orbit Distance", &cameraPos[2], 0.1f);
-					ImGui::SetNextItemWidth(240.0f);
-					ImGui::DragFloat3("Camera Position", cameraVec, 0.1f);
-					ImGui::EndTabItem();
-
-				}
+                if (ImGui::BeginTabItem("Visualizer")) {
+                    ImGui::SetNextItemWidth(120.0f);
+                    ImGui::SliderFloat("FOV", &fov, 20.0f, 100.0f);
+                    ImGui::Checkbox("Spin Model?", &spinModel);
+                    ImGui::EndTabItem();
+                }
 
 				ImGui::EndTabBar();
 			}
@@ -693,6 +760,11 @@ void RenderFrame() {
 		}
 
 	}
+
+    ImVec2 pos = ImVec2(350, 36);
+    ImVec2 size = ImGui::GetWindowSize();
+    ImGui::GetBackgroundDrawList()->AddImage(
+        (void*)g_RenderTargetTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y));
 
 
 	ImGui::End();
@@ -749,7 +821,7 @@ void RenderFrame() {
 	}
 
 
-	
+    //ImGui::Image((void*)g_RenderTargetTexture, ImVec2(128, 128));
 
 	ImGui::End();
 	
@@ -771,39 +843,42 @@ void RenderFrame() {
 
 	D3DXMATRIX matView;    // the view transform matrix
 
-	D3DXVECTOR3 eyePos(cameraPos[0] + cameraVec[0], cameraPos[1] + cameraVec[1], cameraPos[2] + cameraVec[2]);
-	D3DXVECTOR3 lookAt(cameraVec[0], cameraVec[1], cameraVec[2]);
-	D3DXVECTOR3 upDir(0.0f, 1.0f, 0.0f);
+    pitch = std::max(-D3DX_PI * 0.49f, std::min(D3DX_PI * 0.49f, pitch));
 
-	D3DXMatrixLookAtLH(&matView, &eyePos, &lookAt, &upDir);
+    float x = radius * cosf(pitch) * sinf(yaw);
+    float y = radius * sinf(pitch);
+    float z = radius * cosf(pitch) * cosf(yaw);
+    cameraPos = D3DXVECTOR3(x, y, z) + target;
 
-	g_pd3dDevice->SetTransform(D3DTS_VIEW, &matView);    // set the view transform to matView
+    D3DXVECTOR3 up(0.0f, 1.0f, 0.0f);
+    D3DXMatrixLookAtLH(&view, &cameraPos, &target, &up);
+    g_pd3dDevice->SetTransform(D3DTS_VIEW, &view);
 
 	D3DXMATRIX matProjection;     // the projection transform matrix
 
-	D3DXMatrixPerspectiveFovLH(&matProjection,
-		D3DXToRadian(fov),    // the horizontal field of view
-		(FLOAT)1280 / (FLOAT)720, // aspect ratio
-		1.0f,    // the near view-plane
-		5000.0f);    // the far view-plane
+    D3DXMatrixPerspectiveFovLH(&matProjection,
+        D3DXToRadian(fov),    // the horizontal field of view
+        (FLOAT)size.x / (FLOAT)size.y, // aspect ratio
+        1.0f,    // the near view-plane
+        5000.0f);    // the far view-plane
 
 	g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &matProjection);
 	
 
 
 
-	ImGui::EndFrame();
-	g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-	D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
-	g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
-	g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
-	if (g_pd3dDevice->BeginScene() >= 0)
-	{
+
+    g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
+    g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
+    g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
+    if (g_pd3dDevice->BeginScene() >= 0)
+    {
 		const float pointSize = 5.0f;
 		g_pd3dDevice->SetRenderState(D3DRS_POINTSIZE, *reinterpret_cast<const DWORD *>(&pointSize));
-		g_pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);  // unless you're using normals and lights
-		g_pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE); // disable backface culling for now
-		g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, TRUE);
+        g_pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);  // unless you're using normals and lights
+        g_pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE); // disable backface culling for now
+        g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, TRUE);
 
 		if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
 			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
@@ -825,8 +900,16 @@ void RenderFrame() {
 
 		}
 
-		g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
-		g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+        g_pd3dDevice->EndScene();
+        g_pd3dDevice->SetRenderTarget(0, g_OriginalBackBuffer);
+        g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
+            D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
+        ImGui::EndFrame();
+        g_pd3dDevice->BeginScene();
+
+
+        g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
+        g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 
 
 		ImGui::Render();
