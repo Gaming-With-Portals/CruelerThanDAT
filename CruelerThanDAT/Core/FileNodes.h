@@ -136,11 +136,11 @@ public:
 
 		ZeroMemory(&ofn, sizeof(OPENFILENAME));
 
-		ofn.lpstrFile = reinterpret_cast<LPWSTR>(szFile); // TODO: Make szFile be LPSTR
+		ofn.lpstrFile = reinterpret_cast<LPWSTR>(szFile); // TODO: Make szFile be LPWSTR
 		ofn.lStructSize = sizeof(OPENFILENAME);
 		ofn.hwndOwner = NULL;
 		ofn.nMaxFile = 260;
-		ofn.lpstrFilter = reinterpret_cast<LPCWSTR>(fileFilter); // TODO: Make fileFilter be LPCSTR
+		ofn.lpstrFilter = reinterpret_cast<LPCWSTR>(fileFilter); // TODO: Make fileFilter be LPCWSTR
 
 		ofn.nFilterIndex = 1;
 		ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
@@ -169,11 +169,11 @@ public:
 
 		ZeroMemory(&ofn, sizeof(OPENFILENAME));
 
-		ofn.lpstrFile = reinterpret_cast<LPWSTR>(szFile); // TODO: Make szFile be LPSTR
+		ofn.lpstrFile = reinterpret_cast<LPWSTR>(szFile); // TODO: Make szFile be LPWSTR
 		ofn.lStructSize = sizeof(OPENFILENAME);
 		ofn.hwndOwner = NULL;
 		ofn.nMaxFile = 260;
-		ofn.lpstrFilter = reinterpret_cast<LPCWSTR>(fileFilter); // TODO: Make fileFilter be LPCSTR
+		ofn.lpstrFilter = reinterpret_cast<LPCWSTR>(fileFilter); // TODO: Make fileFilter be LPCWSTR
 
 		ofn.nFilterIndex = 1;
 		ofn.Flags = OFN_PATHMUSTEXIST;
@@ -518,7 +518,7 @@ public:
 					}
 					ImGui::PushID(i);
 					if (ImGui::CollapsingHeader(("Group " + std::to_string(i) + " " + node.prop_category + std::format("{:04x}", node.prop_id)).c_str())) {
-						ImGui::Text("Item Count %d", node.instances.size());
+						ImGui::Text("Item Count %zu", node.instances.size());
 						ImGui::InputInt("Flag A", &node.flag_a);
 						ImGui::InputInt("Flag B", &node.flag_b);
 					}
@@ -1801,7 +1801,7 @@ public:
 		int i = 0;
 		for (CruelerMesh* mesh : displayMeshes) {
 			i += 1;
-			ImGui::Text((std::to_string(i) + ". ").c_str());
+			ImGui::Text("%s. ", (std::to_string(i)).c_str());
 			ImGui::SameLine();
 			ImGui::Checkbox((mesh->name).c_str(), &mesh->visibility);
 

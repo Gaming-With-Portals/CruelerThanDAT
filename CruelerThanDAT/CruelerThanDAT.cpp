@@ -493,7 +493,7 @@ void RenderFrame() {
         ImGui::SameLine();
     }
 
-    ImGui::Text("Textures Loaded: %d/%d", textureMap.size(), TEXTURE_CAP);
+    ImGui::Text("Textures Loaded: %zu/%d", textureMap.size(), TEXTURE_CAP);
 
 
     ImGui::End();
@@ -720,11 +720,11 @@ void RenderFrame() {
 
         for (CTDLog::LogEntry* log : CTDLog::Log::getInstance().logEntries) {
             if (log->text == "update") {
-                ImGui::TextColored(log->color, (std::string(ICON_CI_DESKTOP_DOWNLOAD) + " CruelerThanDAT is ready to update! An update button has appeared in the top bar").c_str());
+                ImGui::TextColored(log->color, "%s CruelerThanDAT is ready to update! An update button has appeared in the top bar", std::string(ICON_CI_DESKTOP_DOWNLOAD).c_str());
 
             }
             else {
-                ImGui::TextColored(log->color, log->text.c_str());
+                ImGui::TextColored(log->color, "%s", log->text.c_str());
             }
             
         }
@@ -860,19 +860,19 @@ int main(int argc, char* argv[])
 
     if (!std::filesystem::exists("Assets")) {
         printf("Assets are missing or corrupt. (Case 0)");
-        std::cin;
+        std::cin.get();
     }
     else if (!std::filesystem::exists("Assets/img.dds")) {
         printf("Assets are missing or corrupt. (Case 1)");
-        std::cin;
+        std::cin.get();
     }
     else if (!std::filesystem::exists("Assets/Themes")) {
         printf("Themes are missing or corrupt. (Case 0)");
-        std::cin;
+        std::cin.get();
     }
     else if (!std::filesystem::exists("Assets/Model")) {
         printf("DirectX Data is missing or corrupt. (Case 0)");
-        std::cin;
+        std::cin.get();
     }
 
     themeManager = new ThemeManager();
