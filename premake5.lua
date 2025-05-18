@@ -137,10 +137,17 @@ workspace "CruelerThanDAT"
 		}
 
 		includedirs {
+
+		}
+
+		externalincludedirs {
 			path.join(directx,	"Include/"),
 			path.join(fbx,		"include/"),
 
-			"depends/curl/include/"
+			"depends/curl/include/",
+			"depends/imgui/inc/",
+			"depends/imstb/",
+			"depends/json/",
 		}
 
 		files {
@@ -148,9 +155,19 @@ workspace "CruelerThanDAT"
 			"CruelerThanDAT/**.hpp",
 			"CruelerThanDAT/**.h",
 
+			"depends/imgui/src/**.cpp",
+			"depends/imgui/inc/**.h",
+			"depends/imstb/**.h",
+			"depends/json/**.hpp",
+
 			-- TODO: Filter this to add it to VS but not Make
 			--"CruelerThanDAT/**.rc",
 		}
+
+		filter { "files:depends/imgui/**.cpp", "toolset:clang" }
+			buildoptions "-Wno-everything"
+		filter { "files:depends/imgui/**.cpp", "toolset:msc" }
+			buildoptions "/w"
 
 		filter { "configurations:Debug" }
 			links {

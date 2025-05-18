@@ -1,5 +1,5 @@
 #include "themeLoader.h"
-#include "../imgui.h"
+#include <imgui.h>
 
 void SteamStyle()
 {
