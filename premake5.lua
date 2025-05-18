@@ -134,8 +134,9 @@ workspace "CruelerThanDAT"
 		}
 
 		postbuildcommands {
-			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"'
-			'{COPY} "depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"'
+			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
+			'{COPY} "depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+			'{COPY} "libfbxsdk.dll" "%{cfg.buildtarget.directory}/libfbxsdk.dll',
 		}
 
 		includedirs {
