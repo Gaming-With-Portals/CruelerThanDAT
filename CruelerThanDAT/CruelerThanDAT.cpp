@@ -535,6 +535,7 @@ void RenderFrame() {
     static float index = 180.0f;  
     //static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
     static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
+	(void)cameraVec;
     static bool spinModel = false;
     g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
     g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);

@@ -276,7 +276,7 @@ void ImGuiDarkStyle()
 
 void ThemeManager::UpdateThemeList() {
 	for (const auto& entry : fs::directory_iterator("Assets\\Themes")) {
-
+		(void)entry;
 
 
 
