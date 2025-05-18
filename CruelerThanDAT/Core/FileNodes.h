@@ -112,7 +112,7 @@ public:
 
 
 	std::string fileIcon = ICON_CI_QUESTION;
-	bool fileIsBigEndian;
+	bool fileIsBigEndian = false;
 	ImVec4 TextColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
 	FileNode(std::string fName) {
@@ -135,11 +135,19 @@ public:
 		mbstowcs_s(0, szFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
 
 		ZeroMemory(&ofn, sizeof(OPENFILENAME));
+<<<<<<< Updated upstream
 		ofn.lpstrFile = szFile;
 		ofn.lStructSize = sizeof(OPENFILENAME);
 		ofn.hwndOwner = NULL;
 		ofn.nMaxFile = 260;
 		ofn.lpstrFilter = fileFilter;
+=======
+		ofn.lpstrFile = reinterpret_cast<LPWSTR>(szFile); // TODO: Make szFile be LPSTR
+		ofn.lStructSize = sizeof(OPENFILENAME);
+		ofn.hwndOwner = NULL;
+		ofn.nMaxFile = 260;
+		ofn.lpstrFilter = reinterpret_cast<LPCWSTR>(fileFilter); // TODO: Make fileFilter be LPCSTR
+>>>>>>> Stashed changes
 		ofn.nFilterIndex = 1;
 		ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 
@@ -166,11 +174,19 @@ public:
 		mbstowcs_s(0, szFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
 
 		ZeroMemory(&ofn, sizeof(OPENFILENAME));
+<<<<<<< Updated upstream
 		ofn.lpstrFile = szFile;
 		ofn.lStructSize = sizeof(OPENFILENAME);
 		ofn.hwndOwner = NULL;
 		ofn.nMaxFile = 260;
 		ofn.lpstrFilter = fileFilter;
+=======
+		ofn.lpstrFile = reinterpret_cast<LPWSTR>(szFile); // TODO: Make szFile be LPSTR
+		ofn.lStructSize = sizeof(OPENFILENAME);
+		ofn.hwndOwner = NULL;
+		ofn.nMaxFile = 260;
+		ofn.lpstrFilter = reinterpret_cast<LPCWSTR>(fileFilter); // TODO: Make fileFilter be LPCSTR
+>>>>>>> Stashed changes
 		ofn.nFilterIndex = 1;
 		ofn.Flags = OFN_PATHMUSTEXIST;
 
