@@ -216,6 +216,10 @@ std::string getDTTPath(const std::string& originalPath) {
 }
 
 void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
+    if (WTA.GetSize() < 28 || WTP.GetSize() <= 0) {
+        return;
+    }
+
     WTA.Seek(8);
     unsigned int textureCount = WTA.ReadUINT32();
     unsigned int offsetTextureOffsets = WTA.ReadUINT32();
@@ -326,6 +330,10 @@ void SelfUpdate() {
         curl_easy_perform(curl);
         curl_easy_cleanup(curl);
     }
+    if (response == "") {
+        return;
+    }
+
     nlohmann::json data = nlohmann::json::parse(response);
     std::string tag = data["tag_name"];
     size_t underscorePos = tag.rfind('_');
