@@ -864,6 +864,11 @@ void RenderFrame() {
     D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
     g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
     g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
+	
+	g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
+		D3DCOLORWRITEENABLE_RED | 
+		D3DCOLORWRITEENABLE_GREEN | 
+		D3DCOLORWRITEENABLE_BLUE);
     if (g_pd3dDevice->BeginScene() >= 0)
     {
 		const float pointSize = 5.0f;
@@ -893,6 +898,13 @@ void RenderFrame() {
 		}
 
         g_pd3dDevice->EndScene();
+		
+		g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
+			D3DCOLORWRITEENABLE_RED | 
+			D3DCOLORWRITEENABLE_GREEN | 
+			D3DCOLORWRITEENABLE_BLUE |
+			D3DCOLORWRITEENABLE_ALPHA);
+
         g_pd3dDevice->SetRenderTarget(0, g_OriginalBackBuffer);
         g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
             D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
