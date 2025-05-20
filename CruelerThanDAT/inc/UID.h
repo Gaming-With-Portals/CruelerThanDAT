@@ -612,6 +612,7 @@ struct UIDEntry3 {
 		u11 = br.ReadUINT32();
 		u12 = br.ReadUINT32();
 		u13 = br.ReadFloat(); // TODO: What???
+		u14 = br.ReadFloat();
 	}
 
 	void Write(BinaryWriter* bw) {
