@@ -74,6 +74,10 @@
 //  2017-10-23: Inputs: Using Win32 ::SetCapture/::GetCapture() to retrieve mouse positions outside the client area when dragging.
 //  2016-11-12: Inputs: Only call Win32 ::SetCursor(nullptr) when io.MouseDrawCursor is set.
 
+// This really shouldn't be here, but unless we separate ImGui into a separate project,
+// MSVC won't compile these files without this include.
+#include "pch.hpp"
+
 #include "imgui.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_impl_win32.h"

@@ -1,5 +1,6 @@
 #pragma once
-#include <wtypes.h>
+#include "pch.hpp"
+
 struct CUSTOMVERTEX {
     float x, y, z;      // position
     DWORD color;        // optional, or use normals if you want lighting

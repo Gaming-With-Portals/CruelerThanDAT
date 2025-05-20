@@ -1,10 +1,8 @@
 #pragma once
+#include "pch.hpp"
+
 #ifndef CRC32_H
 #define CRC32_H
-
-#include <string>
-#include <cstdint>
-#include <vector>
 
 class CRC32 {
 

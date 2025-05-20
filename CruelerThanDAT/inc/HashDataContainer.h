@@ -1,8 +1,9 @@
 #pragma once
+#include "pch.hpp"
+
 #ifndef HASH_DATA_CONTAINER_H
 #define HASH_DATA_CONTAINER_H
 
-#include <vector>
 
 class HashDataContainer {
 public:

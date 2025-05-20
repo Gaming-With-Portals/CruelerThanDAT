@@ -35,6 +35,10 @@
 //  2018-02-16: Misc: Obsoleted the io.RenderDrawListsFn callback and exposed ImGui_ImplDX9_RenderDrawData() in the .h file so you can call it yourself.
 //  2018-02-06: Misc: Removed call to ImGui::Shutdown() which is not available from 1.60 WIP, user needs to call CreateContext/DestroyContext themselves.
 
+// This really shouldn't be here, but unless we separate ImGui into a separate project,
+// MSVC won't compile these files without this include.
+#include "pch.hpp"
+
 #include "imgui.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_impl_dx9.h"

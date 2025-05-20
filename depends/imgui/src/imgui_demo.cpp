@@ -95,6 +95,10 @@ Index of this file:
 
 */
 
+// This really shouldn't be here, but unless we separate ImGui into a separate project,
+// MSVC won't compile these files without this include.
+#include "pch.hpp"
+
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS
 #endif

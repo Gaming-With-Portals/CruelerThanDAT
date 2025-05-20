@@ -1,8 +1,8 @@
 #pragma once
+#include "pch.hpp"
+
 #include "BinaryHandler.h"
 #include "FileUtils.h"
-#include <fstream>
-#include <vector>
 
 class CTDSettings {
 public:

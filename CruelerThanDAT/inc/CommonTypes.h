@@ -1,4 +1,6 @@
 #pragma once
+#include "pch.hpp"
+
 struct MGRVector {
 	float x;
 	float y;

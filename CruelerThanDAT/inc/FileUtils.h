@@ -1,5 +1,5 @@
 #pragma once
-#include "stdio.h"
+#include "pch.hpp"
 
 bool ReadFileIntoVector(const std::string& filePath, std::vector<char>& data) {
     std::ifstream file(filePath, std::ios::binary);

@@ -1,8 +1,5 @@
 #pragma once
-#include "vector"
-#include <string>
-#include <iostream>
-#include <filesystem>
+#include "pch.hpp"
 namespace fs = std::filesystem;
 
 

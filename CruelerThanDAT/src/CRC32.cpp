@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "CRC32.h"
 
 // Constructor: Precompute the CRC32 lookup table

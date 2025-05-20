@@ -1,4 +1,5 @@
 #pragma once
+#include "pch.hpp"
 #include "CommonTypes.h"
 namespace MGRUI {
 	enum UIDData1Type {

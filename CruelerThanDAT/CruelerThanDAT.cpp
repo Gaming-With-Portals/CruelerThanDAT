@@ -1,28 +1,19 @@
+#include "pch.hpp"
+
 #define NOMINMAX
 #define CURL_STATICLIB
 
-#include <Windows.h>
-#include <d3d9.h>
-#include <d3dx9.h>
-#include "imgui.h"
-#include "imgui_impl_dx9.h"
-#include "imgui_impl_win32.h"
-#include <iostream>
+#include <imgui_impl_dx9.h>
+#include <imgui_impl_win32.h>
+
 #include "globals.h"
 #include "FileNodes.h"
-#include <vector>
-#include <fstream>
-#include <memory>
 #include "CodIcons.h"
-#include <shellapi.h>
-#include <chrono>
 #include "Log.h"
 #include "themeLoader.h"
 #include "BasicShaders.h"
 #include "FileUtils.h"
 #include "CTDSettings.h"
-#include "curl/curl.h"
-#include "json.hpp"
 
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 int TEXTURE_CAP = 512;
@@ -191,7 +182,7 @@ namespace HelperFunction {
 void CreateViewportRT(int width, int height)
 {
     g_pd3dDevice->CreateTexture(width, height, 1, D3DUSAGE_RENDERTARGET,
-        D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &g_RenderTargetTexture, NULL);
+        D3DFMT_A32B32G32R32F, D3DPOOL_DEFAULT, &g_RenderTargetTexture, NULL);
 
     g_RenderTargetTexture->GetSurfaceLevel(0, &g_RenderTargetSurface);
 }

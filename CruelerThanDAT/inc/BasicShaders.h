@@ -1,4 +1,5 @@
 #pragma once
+#include "pch.hpp"
 const char* solidColorVTX = R"(
     float4x4 WorldViewProj;
 

@@ -1,31 +1,19 @@
 #pragma once
+#include "pch.hpp"
+
 #ifndef FILENODE_H
 #define FILENODE_H
 #define NOMINMAX
-#include <string>
-#include <vector>
 #include "globals.h"
-#include <imgui.h>
 #include "BinaryHandler.h"
 #include "CodIcons.h"
-#include <windows.h>
-#include <fstream> 
 #include "Log.h"
-#include <algorithm>
-#include <cmath>
-#include <iostream>
-#include <functional>
 #include "CRC32.h"
 #include "HashDataContainer.h"
-#include <sstream>
-#include <format>
 #include "ImGuiExtended.h"
 #include "WMB.h"
 #include "CTDModel.h"
 #include "UID.h"
-#include <d3dx9.h>
-#include <chrono>
-#include "fbxsdk.h"
 
 /**/
 

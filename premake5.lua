@@ -43,6 +43,9 @@ workspace "CruelerThanDAT"
 		-- the Premake documentation.
 		kind "ConsoleApp"
 
+		pchsource "CruelerThanDAT/pch.cpp"
+		pchheader "pch.hpp"
+
 		if (
 			"gmake" == _ACTION or
 			"gmakelegacy" == _ACTION) then
@@ -90,6 +93,7 @@ workspace "CruelerThanDAT"
 			}
 
 			files {
+				"CruelerThanDAT/pch.cpp",
 				"CruelerThanDAT/CruelerThanDAT.cpp",
 				"CruelerThanDAT/src/**.cpp",
 				"CruelerThanDAT/inc/**.hpp",
@@ -124,7 +128,7 @@ workspace "CruelerThanDAT"
 			path.join(directx,	"Include/"),
 			path.join(fbx,		"include/"),
 
-			"depends/curl/include/",
+			"depends/curl/include/curl/",
 			"depends/imgui/inc/",
 			"depends/imstb/",
 			"depends/json/",

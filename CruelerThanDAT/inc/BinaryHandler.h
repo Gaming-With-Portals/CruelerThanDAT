@@ -1,10 +1,5 @@
 #pragma once
-#include <iostream>
-#include <vector>
-#include <string>
-#include <cstring>
-#include <stdexcept>
-#include <algorithm>
+#include "pch.hpp"
 
 class BinaryReader {
 public:

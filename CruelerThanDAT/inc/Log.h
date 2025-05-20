@@ -1,7 +1,8 @@
 #pragma once
-#include "string"
-#include "vector"
+#include "pch.hpp"
+
 #include <imgui.h>
+
 #include "CodIcons.h"
 
 namespace CTDLog {
