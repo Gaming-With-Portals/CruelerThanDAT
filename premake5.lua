@@ -35,56 +35,7 @@ workspace "CruelerThanDAT"
 		optimize "Full"
 		linktimeoptimization "On"
 
-	project "cURL"
-		kind "Makefile"
-		language "C"
-		location "depends/curl/"
-
-		if ("gmake" == _ACTION or
-			"gmakelegacy" == _ACTION) then
-				buildcommands {
-					-- TODO: Filter each VS version separately for this command to match it.
-					"cmake -S . -B ../../build-curl/%{cfg.longname}/ -G \"Unix Makefiles\" -DBUILD_SHARED_LIBS=OFF -DCURL_STATICLIB=ON -DCURL_USE_LIBPSL=OFF -DCMAKE_BUILD_TYPE=%{cfg.longname} -DCMAKE_C_COMPILER=clang",
-					-- IMPORTANT TODO: ADD LIBPSL TO THE CULR BUILD INSTEAD OF SKIPPING IT.                                      ^~~~~~~~~~~~~~~~~~~~^
-					--                 THIS IS IMPORTANT BECAUSE CURL USES LIBPSL TO PROTECT
-					--                 AGAINST HACKING ATTEMPTS RELATED TO COOKIES.
-					--                 DO NOT MERGE THIS BRANCH UNTIL THIS IS FIXED.
-	
-					-- TODO: Add an option somehow so -j4 can be changed by the user. -j4 means multi-threaded build with four threads.
-					"cmake --build ../../build-curl/%{cfg.longname}/ --config %{cfg.longname} -j4",
-				}
-				filter { "configurations:Debug" }
-					buildoutputs { "../../build-curl/%{cfg.longname}/lib/%{cfg.longname}/libcurl-d.lib" }
-				filter { "configurations:Release" }
-					buildoutputs { "../../build-curl/%{cfg.longname}/lib/%{cfg.longname}/libcurl.lib" }
-		elseif (
-			"vs2022" == _ACTION or
-			"vs2019" == _ACTION or
-			"vs2017" == _ACTION or
-			"vs2015" == _ACTION or
-			"vs2013" == _ACTION or
-			"vs2012" == _ACTION or
-			"vs2010" == _ACTION or
-			"vs2008" == _ACTION or
-			"vs2005" == _ACTION) then
-			buildcommands {
-				-- TODO: Filter each VS version separately for this command to match it.
-				"cmake -S . -B ../../build-curl/%{cfg.longname}/ -G \"Visual Studio 17 2022\" -DBUILD_SHARED_LIBS=OFF -DCURL_STATICLIB=ON -DCURL_USE_LIBPSL=OFF -DCMAKE_BUILD_TYPE=%{cfg.longname}",
-				-- IMPORTANT TODO: ADD LIBPSL TO THE CULR BUILD INSTEAD OF SKIPPING IT.                           ^~~~~~~~~~~~~~~~~~~~^
-				--                 THIS IS IMPORTANT BECAUSE CURL USES LIBPSL TO PROTECT
-				--                 AGAINST HACKING ATTEMPTS RELATED TO COOKIES.
-				--                 DO NOT MERGE THIS BRANCH UNTIL THIS IS FIXED.
-
-				-- TODO: Add an option somehow so -j4 can be changed by the user. -j4 means multi-threaded build with four threads.
-				"cmake --build ../../build-curl/%{cfg.longname}/ --config %{cfg.longname} -j4",
-			}
-			filter { "configurations:Debug" }
-				buildoutputs { "../../build-curl/%{cfg.longname}/lib/%{cfg.longname}/libcurl-d.lib" }
-			filter { "configurations:Debug" }
-				buildoutputs { "../../build-curl/%{cfg.longname}/lib/%{cfg.longname}/libcurl.lib" }
-		else
-			error("Action not supported")
-		end
+	include("premake5-curl.lua")
 
 	project "CruelerThanDAT"
 		-- For this project, WindowedApp might make more sense. Note there's no difference
@@ -92,11 +43,27 @@ workspace "CruelerThanDAT"
 		-- the Premake documentation.
 		kind "ConsoleApp"
 
+		pchsource "CruelerThanDAT/pch.cpp"
+		pchheader "pch.hpp"
+
 		if (
 			"gmake" == _ACTION or
 			"gmakelegacy" == _ACTION) then
 			toolset "clang"
 			linkoptions { "-fuse-ld=lld" }
+
+			files {
+				"CruelerThanDAT/CruelerThanDAT.cpp",
+				"CruelerThanDAT/src/**.cpp",
+				"CruelerThanDAT/inc/**.hpp",
+				"CruelerThanDAT/inc/**.h",
+
+				"depends/imgui/src/**.cpp",
+				"depends/imgui/inc/**.h",
+				"depends/imstb/**.h",
+				"depends/json/**.hpp",
+			}
+
 			libdirs {
 				-- We can put this in a filter if we wanna link the debug build
 				-- of libfbxsdk for the debug configuration.
@@ -124,33 +91,57 @@ workspace "CruelerThanDAT"
 
 				"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 			}
+
+			files {
+				"CruelerThanDAT/pch.cpp",
+				"CruelerThanDAT/CruelerThanDAT.cpp",
+				"CruelerThanDAT/src/**.cpp",
+				"CruelerThanDAT/inc/**.hpp",
+				"CruelerThanDAT/inc/**.h",
+				"CruelerThanDAT/**.rc", -- TODO: Remove RC files and do it the standard way
+	
+				"depends/imgui/src/**.cpp",
+				"depends/imgui/inc/**.h",
+				"depends/imstb/**.h",
+				"depends/json/**.hpp",
+			}
 		else
 			error("Action not supported")
 		end
 
 		defines {
 			"mLefttChild=mLeftChild", -- Fix typo in the FBX SDK from our end with macros.
+			"UNICODE",
 		}
 
 		postbuildcommands {
-			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"'
+			'{COPYFILE} "%{prj.location}/libfbxsdk.dll" "%{cfg.buildtarget.directory}/libfbxsdk.dll"',
+			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
+			'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
 		}
 
 		includedirs {
+			"CruelerThanDAT/inc/",
+		}
+
+		externalincludedirs {
 			path.join(directx,	"Include/"),
 			path.join(fbx,		"include/"),
 
-			"depends/curl/include/"
+			"depends/curl/include/curl/",
+			"depends/imgui/inc/",
+			"depends/imstb/",
+			"depends/json/",
 		}
 
-		files {
-			"CruelerThanDAT/**.cpp",
-			"CruelerThanDAT/**.hpp",
-			"CruelerThanDAT/**.h",
-
-			-- TODO: Filter this to add it to VS but not Make
-			--"CruelerThanDAT/**.rc",
-		}
+		filter { "toolset:clang" }
+			buildoptions "-Wall"
+		filter { "toolset:msc" }
+			warnings "High"
+		filter { "files:depends/imgui/**.cpp", "toolset:clang" }
+			buildoptions "-Wno-everything"
+		filter { "files:depends/imgui/**.cpp", "toolset:msc" }
+			buildoptions "/w"
 
 		filter { "configurations:Debug" }
 			links {
