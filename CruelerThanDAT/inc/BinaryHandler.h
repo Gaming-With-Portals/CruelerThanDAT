@@ -6,7 +6,20 @@ public:
     BinaryReader(std::vector<char>& data, bool bigEndian = false)
         : data(data), offset(0), isBigEndian(bigEndian) {}
 
-    // Read a UINT32 (4 bytes)
+    uint64_t ReadUINT64() {
+        if (offset + sizeof(uint64_t) > data.size()) {
+            throw std::runtime_error("Read beyond the buffer size.");
+        }
+        uint64_t value = *reinterpret_cast<uint64_t*>(&data[offset]);
+        offset += sizeof(uint64_t);
+
+        if (isBigEndian) {
+            value = ReverseEndian(value);
+        }
+
+        return value;
+    }
+
     uint32_t ReadUINT32() {
         if (offset + sizeof(uint32_t) > data.size()) {
             throw std::runtime_error("Read beyond the buffer size.");

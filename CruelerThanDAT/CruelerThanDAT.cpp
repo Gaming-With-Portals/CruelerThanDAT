@@ -6,6 +6,7 @@
 #include <imgui_impl_dx9.h>
 #include <imgui_impl_win32.h>
 
+#include "CruelerThanDAT.h"
 #include "globals.h"
 #include "FileNodes.h"
 #include "CodIcons.h"
@@ -14,6 +15,8 @@
 #include "BasicShaders.h"
 #include "FileUtils.h"
 #include "CTDSettings.h"
+#include "CPKManager.h"
+
 
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 int TEXTURE_CAP = 512;
@@ -47,12 +50,14 @@ static CTDSettings appConfig;
 
 bool hasHandledArguments = false;
 bool showViewport = true;
-std::vector<FileNode*> openFiles;
+
 std::string downloadURL = "";
 static std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
 static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 
 ThemeManager* themeManager;
+CPKManager* cpkManager;
+
 
 bool showAllSCRMeshes = false;
 bool cruelerLog = true;
@@ -583,7 +588,7 @@ void RenderFrame() {
 		}
 		if (ImGui::BeginTabItem("CPK Viewer")) {
 
-
+			cpkManager->Render();
 
 
 			ImGui::EndTabItem();
@@ -971,7 +976,8 @@ int main(int argc, char* argv[])
 	appConfig.Read();
 
 
-
+	cpkManager = new CPKManager();
+	cpkManager->Init("");
 
 	printf("D3DInit...");
 	CTDLog::Log::getInstance().LogNote("Launching CruelerThanDAT...");
