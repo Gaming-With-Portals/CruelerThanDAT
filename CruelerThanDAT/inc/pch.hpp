@@ -4,7 +4,6 @@
 #define CURL_STATICLIB
 
 #include <stdio.h>
-#include <shobjidl.h>
 
 #include <string>
 #include <vector>
@@ -28,6 +27,7 @@
 #include <windows.h>
 #include <wtypes.h>
 #include <shellapi.h>
+#include <shobjidl.h>
 
 #include <fbxsdk.h>
 #include <curl.h>
