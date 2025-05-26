@@ -4,6 +4,7 @@
 #define CURL_STATICLIB
 
 #include <stdio.h>
+#include <shobjidl.h>
 
 #include <string>
 #include <vector>
@@ -22,6 +23,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <memory>
+#include <variant>
 
 #include <windows.h>
 #include <wtypes.h>
