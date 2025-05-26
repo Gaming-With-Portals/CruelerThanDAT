@@ -152,6 +152,7 @@ workspace "CruelerThanDAT"
 				"normaliz",
 				"ws2_32",
 				"comdlg32",
+				"ole32",
 
 				"d3dx9d",
 				"d3d9",
@@ -168,6 +169,7 @@ workspace "CruelerThanDAT"
 				"normaliz",
 				"ws2_32",
 				"comdlg32",
+				"ole32",
 
 				"d3dx9d",
 				"d3d9",
