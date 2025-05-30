@@ -1,64 +1,230 @@
 #pragma once
 #include "pch.hpp"
 #include "CommonTypes.h"
+
+
 namespace MGRUI {
 	enum UIDData1Type {
 		MCD,
 		UVD,
 		UNK
 	};
+
+	static std::string Entry1TypeFriendlyFormatted[] = {
+	"UIDrawLocator",
+	"Image",
+	"UIDraw9Grid",
+	"MCD Text",
+	"UIDrawString",
+	"UIDrawMask",
+	"UNKNOWN_6",
+	"UNKNOWN_7",
+	"Draw 3 Grid",
+	"UIDrawHit"
+	};
 }
 
-
-struct UIDData1MCD {
-
+enum Entry1Type {
+	UIDrawLocator = 0,
+	UIDrawImage = 1,
+	UIDraw9Grid = 2,
+	UIDrawMessage = 3,
+	UIDrawString = 4,
+	UIDrawMask = 5,
+	UIDraw3Grid = 8,
+	UIDrawHit = 9
 };
 
-struct UIDData1UVD {
-	float width;
-	float height;
-	uint32_t texID;
+struct UIDData1Image {
+	float spriteWidth;
+	float spriteHeight;
+	uint32_t u_0;
+	uint32_t u_1;
+	uint32_t u_2;
+	uint32_t u_3;
+	uint32_t u_4;
+	uint32_t textureID;
 	uint32_t uvdID;
-	bool Read(BinaryReader& br) {
-		width = br.ReadFloat();
-		height = br.ReadFloat();
-		texID = br.ReadUINT32();
+	uint32_t bools;
+	uint32_t unused_2;
+	float f_0;
+	float f_1;
+	float f_2;
+	float f_3;
+
+	void Read(BinaryReader& br) {
+		spriteWidth = br.ReadFloat();
+		spriteHeight = br.ReadFloat();
+		u_0 = br.ReadUINT32();
+		u_1 = br.ReadUINT32();
+		u_2 = br.ReadUINT32();
+		u_3 = br.ReadUINT32();
+		u_4 = br.ReadUINT32();
+		textureID = br.ReadUINT32();
 		uvdID = br.ReadUINT32();
+		bools = br.ReadUINT32();
+		unused_2 = br.ReadUINT32();
+		f_0 = br.ReadFloat();
+		f_1 = br.ReadFloat();
+		f_2 = br.ReadFloat();
+		f_3 = br.ReadFloat();
+	}
 
-		if (floor(width) == ceil(width) && floor(height) == ceil(height)) { // Weird method but if it works I can't blame em
-			return true;
-		}
-		else {
-			return false;
-		}
-
+	void Write(BinaryWriter* bw) {
+		bw->WriteFloat(spriteWidth);
+		bw->WriteFloat(spriteHeight);
+		bw->WriteUINT32(u_0);
+		bw->WriteUINT32(u_1);
+		bw->WriteUINT32(u_2);
+		bw->WriteUINT32(u_3);
+		bw->WriteUINT32(u_4);
+		bw->WriteUINT32(textureID);
+		bw->WriteUINT32(uvdID);
+		bw->WriteUINT32(bools);
+		bw->WriteUINT32(unused_2);
+		bw->WriteFloat(f_0);
+		bw->WriteFloat(f_1);
+		bw->WriteFloat(f_2);
+		bw->WriteFloat(f_3);
 
 	}
+
+	void Render() {
+		ImGui::InputFloat("Sprite Width", &spriteWidth);
+		ImGui::InputFloat("Sprite Height", &spriteHeight);
+		ImGui::InputScalar("Texture ID", ImGuiDataType_U32, &textureID);
+		ImGui::InputScalar("UVD ID", ImGuiDataType_U32, &uvdID);
+		ImGui::InputFloat("f_0", &f_0);
+		ImGui::InputFloat("f_1", &f_1);
+		ImGui::InputFloat("f_2", &f_2);
+		ImGui::InputFloat("f_3", &f_3);
+	}
+
 };
+
+struct UIDData1Message {
+	float f_0;
+	float f_1;
+	uint32_t u_0;
+	uint32_t u_1;
+	const char* mcdFile;
+	uint32_t mcdHash;
+	uint32_t u_2;
+	float f_2;
+	float f_3;
+	float f_4;
+	uint32_t bools;
+	uint32_t u_3;
+	uint32_t u_4;
+	uint32_t u_5;
+	float f_5;
+	float f_6;
+	float f_7;
+	float f_8;
+	float f_9;
+	float f_10;
+	float f_11;
+	float f_12;
+	float f_13;
+	uint16_t u_6;
+	uint16_t u_7;
+	float f_14;
+	float f_15;
+
+	void Read(BinaryReader& br) {
+		f_0 = br.ReadFloat();
+		f_1 = br.ReadFloat();
+		u_0 = br.ReadUINT32();
+		u_1 = br.ReadUINT32();
+		mcdFile = br.ReadString(16).c_str();
+		mcdHash = br.ReadUINT32();
+		u_2 = br.ReadUINT32();
+		f_2 = br.ReadFloat();
+		f_3 = br.ReadFloat();
+		f_4 = br.ReadFloat();
+		bools = br.ReadUINT32();
+		u_3 = br.ReadUINT32();
+		u_4 = br.ReadUINT32();
+		u_5 = br.ReadUINT32();
+		f_5 = br.ReadFloat();
+		f_6 = br.ReadFloat();
+		f_7 = br.ReadFloat();
+		f_8 = br.ReadFloat();
+		f_9 = br.ReadFloat();
+		f_10 = br.ReadFloat();
+		f_11 = br.ReadFloat();
+		f_12 = br.ReadFloat();
+		f_13 = br.ReadFloat();
+		u_6 = br.ReadUINT16();
+		u_7 = br.ReadUINT16();
+		f_14 = br.ReadFloat();
+		f_15 = br.ReadFloat();
+	}
+
+	void Write(BinaryWriter* bw) {
+		bw->WriteFloat(f_0);
+		bw->WriteFloat(f_1);
+		bw->WriteUINT32(u_0);
+		bw->WriteUINT32(u_1);
+		bw->WriteString(mcdFile);
+		bw->WriteUINT32(mcdHash);
+		bw->WriteUINT32(u_2);
+		bw->WriteUINT32(f_2);
+		bw->WriteUINT32(f_3);
+		bw->WriteUINT32(f_4);
+		bw->WriteUINT32(bools);
+		bw->WriteUINT32(u_3);
+		bw->WriteUINT32(u_4);
+		bw->WriteUINT32(u_5);
+		bw->WriteFloat(f_5);
+		bw->WriteFloat(f_6);
+		bw->WriteFloat(f_7);
+		bw->WriteFloat(f_8);
+		bw->WriteFloat(f_9);
+		bw->WriteFloat(f_10);
+		bw->WriteFloat(f_11);
+		bw->WriteFloat(f_12);
+		bw->WriteFloat(f_13);
+		bw->WriteUINT16(u_6);
+		bw->WriteUINT16(u_7);
+		bw->WriteFloat(f_14);
+		bw->WriteFloat(f_15);
+
+	}	
+
+	void Render() {
+
+	}
+
+};
+
+union UIDData1Structures {
+	UIDData1Image img;
+	UIDData1Message mcd;
+};
+
+
+
 
 // Thank you savior RaiderB
 struct UIDData1 {
-	MGRUI::UIDData1Type dataType = MGRUI::UNK;
-	UIDData1MCD mcdData;
-	UIDData1UVD uvdData;
-
+	Entry1Type dataType;
+	UIDData1Structures dataStructure;
+	UIDData1() = default;
 	std::vector<char> data;
-	void Read(BinaryReader& br, int size) {
+	void Read(BinaryReader& br, int size, Entry1Type type) {
+		dataType = type;
+
 		size_t startPos = br.Tell();
 		data = br.ReadBytes(size);
 		br.Seek(startPos);
-		// Type Checking
-		if (size > 36) {
-			dataType = MGRUI::UNK;
-
-			if (uvdData.Read(br)) {
-				dataType = MGRUI::UVD;
-			}
-
-
+		
+		if (type == Entry1Type::UIDrawImage) {
+			dataStructure.img.Read(br);
 		}
-
-
+		else if (type == Entry1Type::UIDrawMessage) {
+			dataStructure.mcd.Read(br);
+		}
 
 	}
 
@@ -200,6 +366,8 @@ struct UIDHeader {
 
 
 struct UIDEntry1 {
+
+
 	MGRVector position;
 	MGRVector rotation;
 	MGRVector scale;
@@ -290,8 +458,8 @@ struct UIDEntry1 {
 	float float_79;
 	int uint_80;
 	float float_81;
-	int bool_82;
-	int uint_83;
+	int uint_82;
+	Entry1Type data1Flag;
 	int uint_84;
 	int uint_85;
 	int uint_86;
@@ -420,8 +588,8 @@ struct UIDEntry1 {
 		float_79 = br.ReadFloat();
 		uint_80 = br.ReadINT32();
 		float_81 = br.ReadFloat();
-		bool_82 = br.ReadINT32();
-		uint_83 = br.ReadINT32();
+		uint_82 = br.ReadUINT32();
+		data1Flag = static_cast<Entry1Type>(br.ReadINT32());
 		uint_84 = br.ReadINT32();
 		uint_85 = br.ReadINT32();
 		uint_86 = br.ReadINT32();
@@ -532,8 +700,8 @@ struct UIDEntry1 {
 		bw->WriteFloat(float_79);
 		bw->WriteINT32(uint_80);
 		bw->WriteFloat(float_81);
-		bw->WriteINT32(bool_82);
-		bw->WriteINT32(uint_83);
+		bw->WriteINT32(uint_82);
+		bw->WriteINT32(data1Flag);
 		bw->WriteINT32(uint_84);
 		bw->WriteINT32(uint_85);
 		bw->WriteINT32(uint_86);
@@ -546,7 +714,7 @@ struct UIDEntry1 {
 	void readAdditionalData(BinaryReader& reader, std::unordered_map<int, int> offsetSizes) {
 		if (data1Offset != 0) {
 			reader.Seek(data1Offset);
-			data1.Read(reader, offsetSizes[data1Offset]);
+			data1.Read(reader, offsetSizes[data1Offset], data1Flag);
 		}
 		if (data2Offset != 0) {
 			reader.Seek(data2Offset);
@@ -612,7 +780,7 @@ struct UIDEntry3 {
 		u11 = br.ReadUINT32();
 		u12 = br.ReadUINT32();
 		u13 = br.ReadFloat(); // TODO: What???
-		u14 = br.ReadFloat();
+
 	}
 
 	void Write(BinaryWriter* bw) {
