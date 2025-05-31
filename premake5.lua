@@ -171,7 +171,7 @@ workspace "CruelerThanDAT"
 				"comdlg32",
 				"ole32",
 
-				"d3dx9d",
+				"d3dx9",
 				"d3d9",
 				"libfbxsdk",
 				"libcurl",
