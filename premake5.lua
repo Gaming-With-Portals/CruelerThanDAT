@@ -114,8 +114,9 @@ workspace "CruelerThanDAT"
 			"UNICODE",
 		}
 
+		local fbxsdkdll = path.join(fbx, "lib/x64/release/libfbxsdk.dll")
 		postbuildcommands {
-			'{COPYFILE} "%{prj.location}/libfbxsdk.dll" "%{cfg.buildtarget.directory}/libfbxsdk.dll"',
+			('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
 			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
 			'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
 		}
