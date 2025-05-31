@@ -17,6 +17,7 @@
 #include "CTDSettings.h"
 #include "CPKManager.h"
 
+std::vector<FileNode*> openFiles;
 
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 int TEXTURE_CAP = 512;
