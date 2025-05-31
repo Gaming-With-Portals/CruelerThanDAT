@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 
+#include <unordered_set>
+#include <queue>
 #include <string>
 #include <vector>
 #include <map>
