@@ -51,6 +51,36 @@ workspace "CruelerThanDAT"
 			"gmakelegacy" == _ACTION) then
 			toolset "clang"
 			linkoptions { "-fuse-ld=lld" }
+			
+			filter { "configurations:Debug" }
+				libdirs {
+					path.join(fbx,		"lib/x64/debug/"),
+					path.join(directx,	"Lib/x64/"),
+
+					"build-curl/%{cfg.longname}/lib/",
+				}
+				
+				local fbxsdkdll = path.join(fbx, "lib/x64/debug/libfbxsdk.dll")
+				postbuildcommands {
+					('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
+					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
+					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+				}
+			filter { "configurations:Release" }
+				libdirs {
+					path.join(fbx,		"lib/x64/release/"),
+					path.join(directx,	"Lib/x64/"),
+
+					"build-curl/%{cfg.longname}/lib/",
+				}
+				
+				local fbxsdkdll = path.join(fbx, "lib/x64/release/libfbxsdk.dll")
+				postbuildcommands {
+					('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
+					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
+					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+				}
+			filter {}
 
 			files {
 				"CruelerThanDAT/CruelerThanDAT.cpp",
@@ -63,15 +93,6 @@ workspace "CruelerThanDAT"
 				"depends/imstb/**.h",
 				"depends/json/**.hpp",
 			}
-
-			libdirs {
-				-- We can put this in a filter if we wanna link the debug build
-				-- of libfbxsdk for the debug configuration.
-				path.join(fbx,		"lib/x64/release/"),
-				path.join(directx,	"Lib/x64/"),
-
-				"build-curl/%{cfg.longname}/lib/",
-			}
 		elseif (
 			"vs2022" == _ACTION or
 			"vs2019" == _ACTION or
@@ -83,14 +104,35 @@ workspace "CruelerThanDAT"
 			"vs2008" == _ACTION or
 			"vs2005" == _ACTION) then
 			toolset "msc"
-			libdirs {
-				-- We can put this in a filter if we wanna link the debug build
-				-- of libfbxsdk for the debug configuration.
-				path.join(fbx,		"lib/x64/release/"),
-				path.join(directx,	"Lib/x64/"),
+			filter { "configurations:Debug" }
+				libdirs {
+					path.join(fbx,		"lib/x64/debug/"),
+					path.join(directx,	"Lib/x64/"),
 
-				"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
-			}
+					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
+				}
+				
+				local fbxsdkdll = path.join(fbx, "lib/x64/debug/libfbxsdk.dll")
+				postbuildcommands {
+					('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
+					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
+					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+				}
+			filter { "configurations:Release" }
+				libdirs {
+					path.join(fbx,		"lib/x64/release/"),
+					path.join(directx,	"Lib/x64/"),
+
+					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
+				}
+				
+				local fbxsdkdll = path.join(fbx, "lib/x64/release/libfbxsdk.dll")
+				postbuildcommands {
+					('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
+					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
+					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+				}
+			filter {}
 
 			files {
 				"CruelerThanDAT/pch.cpp",
@@ -112,13 +154,6 @@ workspace "CruelerThanDAT"
 		defines {
 			"mLefttChild=mLeftChild", -- Fix typo in the FBX SDK from our end with macros.
 			"UNICODE",
-		}
-
-		local fbxsdkdll = path.join(fbx, "lib/x64/release/libfbxsdk.dll")
-		postbuildcommands {
-			('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
-			'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
-			'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
 		}
 
 		includedirs {
