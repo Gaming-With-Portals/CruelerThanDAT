@@ -1,15 +1,10 @@
 #pragma once
-#include <iostream>
-#include <filesystem>
-#include <string>
-#include <vector>
+
+#include "pch.hpp"
+
 #include <imgui.h>
-#include <windows.h>
-#include <shobjidl.h> 
 #include "BinaryHandler.h"
 #include "FileUtils.h"
-#include <variant>
-#include <unordered_map>
 #include <../CruelerThanDAT.h>
 
 namespace fs = std::filesystem;

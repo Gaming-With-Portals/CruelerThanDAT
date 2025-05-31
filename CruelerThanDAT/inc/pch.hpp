@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 
+#include <unordered_set>
+#include <queue>
 #include <string>
 #include <vector>
 #include <map>
@@ -22,10 +24,12 @@
 #include <cstring>
 #include <stdexcept>
 #include <memory>
+#include <variant>
 
 #include <windows.h>
 #include <wtypes.h>
 #include <shellapi.h>
+#include <shobjidl.h>
 
 #include <fbxsdk.h>
 #include <curl.h>
