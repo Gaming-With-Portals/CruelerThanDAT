@@ -14,6 +14,9 @@
 #include "WMB.h"
 #include "CTDModel.h"
 #include "UID.h"
+#include "UVD.h"
+#include <unordered_set>
+#include <queue>
 
 /**/
 
@@ -22,7 +25,7 @@
 
 
 class FileNode;  // Forward declaration
-
+class UvdFileNode;  // Forward declaration
 extern std::vector<FileNode*> openFiles;
 
 
@@ -48,6 +51,7 @@ namespace BXMInternal {
 	struct XMLNode {
 		std::string name = "";
 		std::string value = "";
+		XMLNode* parent;
 		std::vector<XMLNode*> childNodes;
 		std::vector<XMLAttribute*> childAttributes;
 
@@ -92,6 +96,7 @@ public:
 	std::vector<FileNode*> children;
 	std::vector<char> fileData;
 	FileNodeTypes nodeType;
+	FileNode* parent;
 	LPCWSTR fileFilter = L"All Files(*.*)\0*.*;\0";
 	bool loadFailed = false;
 	bool isEdited = false;
@@ -549,9 +554,92 @@ public:
 
 };
 
+class UvdFileNode : public FileNode {
+public:
+	std::vector<UvdTexture> uvdTextures;
+	std::vector<UvdEntry> uvdEntries;
+
+	UvdFileNode(std::string fName) : FileNode(fName) {
+		fileIcon = ICON_CI_LIBRARY;
+		TextColor = { 1.0f, 0.0f, 0.376f, 1.0f };
+		nodeType = UVD;
+		fileFilter = L"UI Element File(*.uvd)\0*.uvd;\0";
+	}
+	void LoadFile() override {
+		BinaryReader reader(fileData, fileIsBigEndian);
+		reader.Seek(0x4);
+		uint32_t entriesCount = reader.ReadUINT32();
+		uint32_t entriesOffset = reader.ReadUINT32();
+		uint32_t texturesOffset = reader.ReadUINT32();
+		uint32_t textureCount = (static_cast<uint32_t>(reader.GetSize()) - texturesOffset) / 36;
+
+		reader.Seek(texturesOffset);
+		for (uint32_t a = 0; a < textureCount; a++) {
+			UvdTexture texture = UvdTexture();
+			texture.name = reader.ReadString(32);
+			texture.id = reader.ReadUINT32();
+			uvdTextures.push_back(texture);
+		}
+
+		reader.Seek(entriesOffset);
+		for (uint32_t a = 0; a < entriesCount; a++) {
+			UvdEntry texture = UvdEntry();
+			texture.Read(reader);
+			uvdEntries.push_back(texture);
+		}
+
+
+
+
+	}
+
+	void RenderGUI() {
+		if (ImGui::BeginTabBar("uvd_editor_bar")) {
+			if (ImGui::BeginTabItem("UVD Entries")) {
+				for (UvdEntry entry : uvdEntries) {
+					if (textureMap.find(entry.textureID) != textureMap.end()) {
+
+						D3DSURFACE_DESC desc;
+						textureMap[entry.textureID]->GetLevelDesc(0, &desc);  // Get info for mip level 0 (the base level)
+						UINT texWidth = desc.Width;
+						UINT texHeight = desc.Height;
+						ImVec2 uv0(entry.x / (float)texWidth, entry.y / (float)texHeight);
+						ImVec2 uv1((entry.x + entry.width) / (float)texWidth, (entry.y + entry.height) / (float)texHeight);
+						ImGui::Image((ImTextureID)(intptr_t)textureMap[entry.textureID], ImVec2(64, 64), uv0, uv1);
+					}
+					else {
+						ImGui::Image((ImTextureID)(intptr_t)textureMap[0], ImVec2(64, 64));
+					}
+
+
+
+					ImGui::SameLine();
+					ImGui::Text("ID: %d", entry.ID);
+
+					if (ImGui::TreeNode(entry.name.c_str())) {
+						ImGui::TreePop();
+					}
+
+				}
+
+
+				ImGui::EndTabItem();
+			}
+
+
+			ImGui::EndTabBar();
+		}
+	}
+
+	void SaveFile() override {
+
+	}
+};
+
 class UidFileNode : public FileNode {
 public:
 	UIDHeader uidHeader;
+	UvdFileNode* pairedUVD = nullptr;
 	std::vector<UIDEntry1> UIDEntry1List;
 	std::vector<UIDEntry2> UIDEntry2List;
 	std::vector<UIDEntry3> UIDEntry3List;
@@ -634,7 +722,7 @@ public:
 		if (!isEdited) {
 			return;
 		}
-
+		
 
 		BinaryWriter* writer = new BinaryWriter(fileIsBigEndian);
 		UIDHeader header;
@@ -722,28 +810,60 @@ public:
 	void RenderGUI() {
 		int i = 0;
 		isEdited = true;
+		if (parent) {
+			for (FileNode* child : parent->children) {
+				if (child->nodeType == UVD) {
+					pairedUVD = (UvdFileNode*)child;
+					break;
+				}
+			}
+		}
+
+
+
 		ImGui::Checkbox("Visaulize UID Positions", &UIDVisualize);
 
 
 		ImGui::GetForegroundDrawList()->AddText(ImVec2(800.0f, 900.0f), IM_COL32(255.0f, 255.0f, 255.0f,255.0f), "UID Preview Canvas");
 		ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(800.0f, 100.0f), ImVec2(1440.0f, 450.0f), IM_COL32(2.0f, 2.0f, 2.0f, 255.0f));
 		for (UIDEntry1& entry : UIDEntry1List) {
-			
+			bool foundUVD = false;
+			UvdEntry associatedUVDEntry;
 			ImGui::PushID(i);
-			ImGui::ColorEdit4("", entry.rgb, ImGuiColorEditFlags_NoInputs);
-			ImGui::SameLine();
-			if (ImGui::TreeNode(("UID Entry: " + std::to_string(i)).c_str())) {
+			if (entry.data1.dataType == Entry1Type::UIDrawImage && pairedUVD) {
+				if (textureMap.find(entry.data1.dataStructure.img.textureID) != textureMap.end()) {
+					for (UvdEntry uvdEntry : pairedUVD->uvdEntries) {
+						if (uvdEntry.ID == entry.data1.dataStructure.img.uvdID) {
+							associatedUVDEntry = uvdEntry;
+							D3DSURFACE_DESC desc;
+							textureMap[uvdEntry.textureID]->GetLevelDesc(0, &desc);  // Get info for mip level 0 (the base level)
+							UINT texWidth = desc.Width;
+							UINT texHeight = desc.Height;
+							ImVec2 uv0(uvdEntry.x / (float)texWidth, uvdEntry.y / (float)texHeight);
+							ImVec2 uv1((uvdEntry.x + uvdEntry.width) / (float)texWidth, (uvdEntry.y + uvdEntry.height) / (float)texHeight);
+							ImGui::Image((ImTextureID)(intptr_t)textureMap[entry.data1.dataStructure.img.textureID], ImVec2(17, 17), uv0, uv1, ImVec4(entry.rgb.r, entry.rgb.g, entry.rgb.b, entry.rgb.a));
+							ImGui::SameLine();
+							foundUVD = true;
+							break;
+						}
+					}
+
+
+				}
+			}
+			if (!foundUVD) {
+				ImGui::ColorEdit4("", entry.rgb, ImGuiColorEditFlags_NoInputs);
+				ImGui::SameLine();
+			}
+			
+			if (ImGui::TreeNode(("UID Entry: " + std::to_string(i) + " (" + MGRUI::Entry1TypeFriendlyFormatted[entry.data1Flag] + ")").c_str())) {
 				ImGui::PushItemWidth(240.0f);
 				ImGui::InputFloat3("Position", entry.position);
 				ImGui::InputFloat3("Rotation", entry.rotation);
 				ImGui::InputFloat3("Scale", entry.scale);
 				ImGui::ColorEdit4("Color", entry.rgb);
-				if (entry.data1.dataType == MGRUI::UVD) {
-					if (ImGui::TreeNode("UVD Data")) {
-						ImGui::Text("Texture ID: %d", entry.data1.uvdData.texID);
-						ImGui::Text("UVD ID: %d", entry.data1.uvdData.uvdID);
-						ImGui::TreePop();
-					}
+				if (entry.data1.dataType == Entry1Type::UIDrawImage) {
+					entry.data1.dataStructure.img.Render();
 				}
 
 
@@ -764,6 +884,10 @@ public:
 
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
+
+				if (ImGui::Button("Duplicate")) {
+					UIDEntry1List.push_back(entry);
+				}
 			}
 
 
@@ -773,7 +897,25 @@ public:
 				float scalex = entry.position.x * (640.0f / 1280.0f) + 800.0f;
 				float scaley = entry.position.y * (360.0f / 720.0f) + 100.0f;
 
-				ImGui::GetForegroundDrawList()->AddText(ImVec2(scalex, scaley), IM_COL32(entry.rgb.r * 255.0f, entry.rgb.g * 255.0f, entry.rgb.b * 255.0f, entry.rgb.a * 255.0f), ("UID Entry: " + std::to_string(i)).c_str());
+				if (foundUVD) {
+					D3DSURFACE_DESC desc;
+					textureMap[associatedUVDEntry.textureID]->GetLevelDesc(0, &desc);  // Get info for mip level 0 (the base level)
+					UINT texWidth = desc.Width;
+					UINT texHeight = desc.Height;
+					ImVec2 uv0(associatedUVDEntry.x / (float)texWidth, associatedUVDEntry.y / (float)texHeight);
+					ImVec2 uv1((associatedUVDEntry.x + associatedUVDEntry.width) / (float)texWidth, (associatedUVDEntry.y + associatedUVDEntry.height) / (float)texHeight);
+					ImVec2 screenPos = ImVec2(scalex, scaley); // top-left position
+					ImVec2 screenEnd = ImVec2(screenPos.x + (associatedUVDEntry.width * entry.scale.x), screenPos.y + (associatedUVDEntry.height * entry.scale.y));
+					foundUVD = true;
+					ImGui::GetForegroundDrawList()->AddImage((ImTextureID)(intptr_t)textureMap[entry.data1.dataStructure.img.textureID], screenPos, screenEnd, uv0, uv1, IM_COL32_WHITE);
+				}
+				else {
+					if (false) {
+						ImGui::GetForegroundDrawList()->AddText(ImVec2(scalex, scaley), IM_COL32(entry.rgb.r * 255.0f, entry.rgb.g * 255.0f, entry.rgb.b * 255.0f, entry.rgb.a * 255.0f), ("UID Entry: " + std::to_string(i)).c_str());
+					}
+					
+				}
+
 				
 			}
 
@@ -784,118 +926,8 @@ public:
 
 };
 
-struct UvdTexture {
-	std::string name;
-	uint32_t id;
-};
-
-struct UvdEntry {
-	std::string name;
-	uint32_t ID;
-	uint32_t textureID;
-	float x;
-	float y;
-	float width;
-	float height;
-	float widthInverse;
-	float heightInverse;
-
-	void Read(BinaryReader& br) {
-		name = br.ReadString(64);
-		ID = br.ReadUINT32();
-		textureID = br.ReadUINT32();
-		x = br.ReadFloat();
-		y = br.ReadFloat();
-		width = br.ReadFloat();
-		height = br.ReadFloat();
-		widthInverse = br.ReadFloat();
-		heightInverse = br.ReadFloat();
-	}
-
-};
 
 
-
-class UvdFileNode : public FileNode {
-public:
-	std::vector<UvdTexture> uvdTextures;
-	std::vector<UvdEntry> uvdEntries;
-
-	UvdFileNode(std::string fName) : FileNode(fName) {
-		fileIcon = ICON_CI_LIBRARY;
-		TextColor = { 1.0f, 0.0f, 0.376f, 1.0f };
-		nodeType = UVD;
-		fileFilter = L"UI Element File(*.uvd)\0*.uvd;\0";
-	}
-	void LoadFile() override {
-		BinaryReader reader(fileData, fileIsBigEndian);
-		reader.Seek(0x4);
-		uint32_t entriesCount = reader.ReadUINT32();
-		uint32_t entriesOffset = reader.ReadUINT32();
-		uint32_t texturesOffset = reader.ReadUINT32();
-		uint32_t textureCount = (static_cast<uint32_t>(reader.GetSize()) - texturesOffset) / 36;
-
-		reader.Seek(texturesOffset);
-		for (uint32_t a = 0; a < textureCount; a++) {
-			UvdTexture texture = UvdTexture();
-			texture.name = reader.ReadString(32);
-			texture.id = reader.ReadUINT32();
-			uvdTextures.push_back(texture);
-		}
-
-		reader.Seek(entriesOffset);
-		for (uint32_t a = 0; a < entriesCount; a++) {
-			UvdEntry texture = UvdEntry();
-			texture.Read(reader);
-			uvdEntries.push_back(texture);
-		}
-
-
-
-
-	}
-
-	void RenderGUI() {
-		if (ImGui::BeginTabBar("uvd_editor_bar")) {
-			if (ImGui::BeginTabItem("UVD Entries")) {
-				for (UvdEntry entry : uvdEntries) {
-					if (textureMap.find(entry.textureID) != textureMap.end()) {
-
-						D3DSURFACE_DESC desc;
-						textureMap[entry.textureID]->GetLevelDesc(0, &desc);  // Get info for mip level 0 (the base level)
-						UINT texWidth = desc.Width;
-						UINT texHeight = desc.Height;
-						ImVec2 uv0(entry.x / (float)texWidth, entry.y / (float)texHeight);
-						ImVec2 uv1((entry.x + entry.width) / (float)texWidth, (entry.y + entry.height) / (float)texHeight);
-						ImGui::Image((ImTextureID)(intptr_t)textureMap[entry.textureID], ImVec2(64, 64), uv0, uv1);
-					}
-					else {
-						ImGui::Image((ImTextureID)(intptr_t)textureMap[0], ImVec2(64, 64));
-					}
-
-
-					
-					ImGui::SameLine();
-					if (ImGui::TreeNode(entry.name.c_str())) {
-						ImGui::Text("ID: %d", entry.ID);
-						ImGui::TreePop();
-					}
-
-				}
-
-
-				ImGui::EndTabItem();
-			}
-
-
-			ImGui::EndTabBar();
-		}
-	}
-
-	void SaveFile() override {
-
-	}
-};
 
 
 
@@ -966,7 +998,7 @@ public:
 	int stringOffset;
 
 	std::string xmlData = "";
-
+	std::vector<std::array<char, 32>> roomBuffers;
 	std::vector<char> xmlBuffer;
 
 	BxmFileNode(std::string fName) : FileNode(fName) {
@@ -979,6 +1011,7 @@ public:
 
 	void RenderGUI() {
 		if (baseNode->name == "SubPhaseInfoRoot") {
+			isEdited = true;
 			ImGui::Text("Phase Editor");
 			BXMInternal::XMLNode* infoList = baseNode->childNodes[0];
 			for (BXMInternal::XMLNode* subNode : infoList->childNodes) {
@@ -998,35 +1031,44 @@ public:
 							foundParam = new BXMInternal::XMLNode();
 							foundParam->name = paramName;
 							foundParam->value = ""; // default empty
+							foundParam->parent = subNode;
 							subNode->childNodes.push_back(foundParam);
 						}
 
 						ImGui::PushID(foundParam);
 
 						std::string& paramValue = foundParam->value;
-
+						
 						if (paramName == "RoomNo") {
 							std::vector<std::string> rooms = BXMInternal::SplitString(paramValue, ' ');
-							std::string newRoomData = "";
-							int i = 0;
-							for (std::string& room : rooms) {
-								char* roomBuffer = new char[32];
-								roomBuffer = room.data();
-								ImGui::InputText(("Room " + std::to_string(i)).c_str(), roomBuffer, 32);
-								ImGui::SameLine();
-								if (!ImGui::Button("-")) {
-									newRoomData = newRoomData + " " + std::string(roomBuffer, 32);
-									i += 1;
-								}
 
-
+							// Resize buffer to match rooms
+							roomBuffers.resize(rooms.size());
+							for (size_t i = 0; i < rooms.size(); ++i) {
+								std::strncpy(roomBuffers[i].data(), rooms[i].c_str(), 32);
+								roomBuffers[i][31] = '\0'; // Ensure null-termination
 							}
+
+							std::string newRoomData;
+
+							for (size_t i = 0; i < roomBuffers.size(); ++i) {
+								ImGui::InputText(("Room " + std::to_string(i)).c_str(), roomBuffers[i].data(), 32);
+								ImGui::SameLine();
+								if (ImGui::Button(("-##" + std::to_string(i)).c_str())) {
+									roomBuffers.erase(roomBuffers.begin() + i);
+									--i;
+									continue;
+								}
+								newRoomData += std::string(roomBuffers[i].data()) + " ";
+							}
+
 							paramValue = newRoomData;
 
 							if (ImGui::Button("New Room")) {
-								paramValue = paramValue + " r000";
+								std::array<char, 32> newRoom{};
+								std::strncpy(newRoom.data(), "r000", 32);
+								roomBuffers.push_back(newRoom);
 							}
-
 						}
 						else if (paramName == "isRestartPoint") {
 							bool checked = (paramValue == "YES");
@@ -1068,10 +1110,10 @@ public:
 	}
 
 
-	BXMInternal::XMLNode* ReadXMLNode(BinaryReader reader) {
+	BXMInternal::XMLNode* ReadXMLNode(BinaryReader reader, BXMInternal::XMLNode* parent) {
 
 		BXMInternal::XMLNode* node = new BXMInternal::XMLNode();
-
+		node->parent = parent;
 		int childCount = reader.ReadUINT16();
 		int firstChildIndex = reader.ReadUINT16();
 		int attributeNumber = reader.ReadUINT16();
@@ -1116,7 +1158,7 @@ public:
 
 		for (int i = 0; i < childCount; i++) {
 			reader.Seek(infoOffset + ((firstChildIndex + i) * 8));
-			node->childNodes.push_back(ReadXMLNode(reader));
+			node->childNodes.push_back(ReadXMLNode(reader, node));
 
 		}
 
@@ -1135,7 +1177,7 @@ public:
 		stringOffset = 16 + 8 * nodeCount + dataCount * 4;
 
 
-		baseNode = ReadXMLNode(reader);
+		baseNode = ReadXMLNode(reader, nullptr);
 		xmlData = ConvertToXML(baseNode);
 		xmlBuffer.resize(xmlData.size() + 1); // +1 for null termination
 		std::copy(xmlData.begin(), xmlData.end(), xmlBuffer.begin()); // Copy new data into buffer
@@ -1144,8 +1186,141 @@ public:
 
 		return;
 	}
-	void SaveFile() override {
 
+	std::vector<BXMInternal::XMLNode*> FlattenXMLTree(BXMInternal::XMLNode* root) {
+		std::vector<BXMInternal::XMLNode*> output;
+		std::queue<BXMInternal::XMLNode*> q;
+		q.push(root);
+
+		while (!q.empty()) {
+			BXMInternal::XMLNode* node = q.front();
+			q.pop();
+			output.push_back(node);
+
+			for (BXMInternal::XMLNode* child : node->childNodes) {
+				q.push(child);
+			}
+		}
+
+		return output;
+	}
+
+	void SaveFile() override {
+		if (!isEdited) {
+			return;
+		}
+		BinaryWriter* writer = new BinaryWriter(true);
+		writer->WriteString("BXM");
+		writer->WriteByteZero();
+		writer->WriteUINT32(0);
+		std::vector<BXMInternal::XMLNode*> nodes = FlattenXMLTree(baseNode);
+		std::unordered_set<std::string> uniqueStrings;
+		for (BXMInternal::XMLNode* node : nodes) {
+			uniqueStrings.insert(node->name);
+			uniqueStrings.insert(node->value);
+			for (BXMInternal::XMLAttribute* attrib : node->childAttributes) {
+				uniqueStrings.insert(attrib->name);
+				uniqueStrings.insert(attrib->value);
+			}
+		}
+
+		std::unordered_map<std::string, int> stringOffsets;
+		int offsetTicker = 0;
+		for (std::string nodeString : uniqueStrings) {
+			if (nodeString.empty()) {
+				stringOffsets[nodeString] = 0xFFFF;
+				offsetTicker += 1; // I have no idea why this happens but it works 
+			}
+			else {
+				stringOffsets[nodeString] = offsetTicker;
+				offsetTicker += (nodeString.size() + 1);
+			}
+
+
+		}
+
+		struct DataInfo {
+			int name;
+			int value;
+		};
+
+
+		std::vector<DataInfo> dataInfos;
+		std::unordered_map <BXMInternal::XMLNode*, int> nodeInfoToDataIndice;
+		int i = 0;
+		for (BXMInternal::XMLNode* node : nodes) {
+			dataInfos.push_back({ stringOffsets[node->name], stringOffsets[node->value] });
+			nodeInfoToDataIndice[node] = i;
+			for (BXMInternal::XMLAttribute* attrib : node->childAttributes) {
+				dataInfos.push_back({ stringOffsets[attrib->name], stringOffsets[attrib->value] });
+				i++;
+			}
+			
+			i++;
+		}
+
+		writer->WriteUINT16(nodes.size());
+		writer->WriteUINT16(dataInfos.size());
+		writer->WriteUINT32(offsetTicker);
+
+		struct BXMNodeInfo {
+			int childSize;
+			int firstChildIdx;
+			int attributeSize;
+			int dataIdx;
+		};
+
+		std::unordered_map<BXMInternal::XMLNode*, BXMNodeInfo> nodeInfos;
+		std::unordered_map<BXMInternal::XMLNode*, int> nodeToIndex;
+		for (int i = 0; i < nodes.size(); ++i) {
+			nodeToIndex[nodes[i]] = i;
+			nodeInfos[nodes[i]] = { (int)nodes[i]->childNodes.size(), -1, (int)nodes[i]->childAttributes.size(), nodeInfoToDataIndice[nodes[i]] };
+		}
+
+
+		for (BXMInternal::XMLNode* node : nodes) {
+			BXMNodeInfo& info = nodeInfos[node];
+			int nextIndex = -1;
+
+			if (!node->childNodes.empty()) {
+				BXMInternal::XMLNode* firstChild = node->childNodes.front();
+				nextIndex = nodeToIndex[firstChild];
+			}
+			else {
+				BXMInternal::XMLNode* parent = node->parent;
+
+				if (parent != nullptr) {
+					BXMInternal::XMLNode* lastChild = parent->childNodes.back();
+					int lastChildIndex = nodeToIndex[lastChild];
+					nextIndex = lastChildIndex + 1;
+				}
+				else {
+					nextIndex = static_cast<int>(nodes.size());
+				}
+			}
+
+			info.firstChildIdx = nextIndex;
+		}
+
+
+		for (BXMInternal::XMLNode* node : nodes) {
+			writer->WriteUINT16(nodeInfos[node].childSize);
+			writer->WriteUINT16(nodeInfos[node].firstChildIdx);
+			writer->WriteUINT16(nodeInfos[node].attributeSize);
+			writer->WriteUINT16(nodeInfos[node].dataIdx);
+		}
+
+		for (DataInfo info : dataInfos) {
+			writer->WriteUINT16(info.name);
+			writer->WriteUINT16(info.value);
+		}
+
+		for (std::string str : uniqueStrings) {
+			writer->WriteString(str);
+			writer->WriteByteZero();
+		}
+
+		fileData = writer->GetData();
 	}
 };
 
@@ -2104,6 +2279,7 @@ public:
 		for (unsigned int f = 0; f < FileCount; f++) {
 			reader.Seek(offsets[f]);
 			FileNode* childNode = HelperFunction::LoadNode(names[f], reader.ReadBytes(sizes[f]), fileIsBigEndian, fileIsBigEndian);
+			childNode->parent = this;
 			if (childNode) {
 				children.push_back(childNode);
 			}

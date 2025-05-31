@@ -262,6 +262,10 @@ public:
     }
 
     void WriteUINT32(uint32_t value) {
+        if (isBigEndian) {
+            value = ReverseEndian(value);
+        }
+
         char bytes[sizeof(uint32_t)];
         std::memcpy(bytes, &value, sizeof(uint32_t));
         if (offset + sizeof(uint32_t) > data.size()) {
@@ -273,6 +277,10 @@ public:
     }
 
     void WriteUINT16(uint16_t value) {
+        if (isBigEndian) {
+            value = ReverseEndian(value);
+        }
+
         char bytes[sizeof(uint16_t)];
         std::memcpy(bytes, &value, sizeof(uint16_t));
         if (offset + sizeof(uint16_t) > data.size()) {
@@ -284,6 +292,10 @@ public:
     }
 
     void WriteINT32(int32_t value) {
+        if (isBigEndian) {
+            value = ReverseEndian(value);
+        }
+
         char bytes[sizeof(int32_t)];
         std::memcpy(bytes, &value, sizeof(int32_t));
         if (offset + sizeof(int32_t) > data.size()) {
@@ -295,6 +307,10 @@ public:
     }
 
     void WriteINT16(int16_t value) {
+        if (isBigEndian) {
+            value = ReverseEndian(value);
+        }
+
         char bytes[sizeof(int16_t)];
         std::memcpy(bytes, &value, sizeof(int16_t));
         if (offset + sizeof(int16_t) > data.size()) {
@@ -306,6 +322,10 @@ public:
     }
 
     void WriteFloat(float value) {
+        if (isBigEndian) {
+            value = ReverseEndian(value);
+        }
+
         char bytes[sizeof(float)];
         std::memcpy(bytes, &value, sizeof(float));
 
@@ -353,8 +373,8 @@ private:
     // Function to reverse the endian-ness (for big-endian <-> little-endian conversion)
     template <typename T>
     T ReverseEndian(T value) {
-        char* data = reinterpret_cast<char*>(&value);
-        std::reverse(data, data + sizeof(T));
+        char* ptr = reinterpret_cast<char*>(&value);
+        std::reverse(ptr, ptr + sizeof(T));
         return value;
     }
 };
