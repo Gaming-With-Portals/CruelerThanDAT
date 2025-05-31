@@ -7,11 +7,7 @@ project "cURL"
 		"gmakelegacy" == _ACTION) then
 			buildcommands {
 				-- TODO: Filter each VS version separately for this command to match it.
-				"cmake -S . -B ../../build-curl/%{cfg.longname}/ -G \"Unix Makefiles\" -DBUILD_SHARED_LIBS=OFF -DCURL_STATICLIB=ON -DCURL_USE_LIBPSL=OFF -DCMAKE_BUILD_TYPE=%{cfg.longname} -DCMAKE_C_COMPILER=clang",
-				-- IMPORTANT TODO: ADD LIBPSL TO THE CULR BUILD INSTEAD OF SKIPPING IT.                                      ^~~~~~~~~~~~~~~~~~~~^
-				--                 THIS IS IMPORTANT BECAUSE CURL USES LIBPSL TO PROTECT
-				--                 AGAINST HACKING ATTEMPTS RELATED TO COOKIES.
-				--                 DO NOT MERGE THIS BRANCH UNTIL THIS IS FIXED.	
+				"cmake -S . -B ../../build-curl/%{cfg.longname}/ -G \"Unix Makefiles\" -DBUILD_SHARED_LIBS=OFF -DCURL_STATICLIB=ON -DCURL_USE_LIBPSL=OFF -DCURL_DISABLE_COOKIES=ON -DCMAKE_BUILD_TYPE=%{cfg.longname} -DCMAKE_C_COMPILER=clang",
 				-- TODO: Add an option somehow so -j4 can be changed by the user. -j4 means multi-threaded build with four threads.
 				"cmake --build ../../build-curl/%{cfg.longname}/ --config %{cfg.longname} -j4",
 			}
@@ -31,12 +27,7 @@ project "cURL"
 		"vs2005" == _ACTION) then
 		buildcommands {
 			-- TODO: Filter each VS version separately for this command to match it.
-			"cmake -S . -B ../../build-curl/%{cfg.longname}/ -G \"Visual Studio 17 2022\" -DBUILD_SHARED_LIBS=OFF -DCURL_STATICLIB=ON -DCURL_USE_LIBPSL=OFF -DCMAKE_BUILD_TYPE=%{cfg.longname}",
-			-- IMPORTANT TODO: ADD LIBPSL TO THE CULR BUILD INSTEAD OF SKIPPING IT.                           ^~~~~~~~~~~~~~~~~~~~^
-			--                 THIS IS IMPORTANT BECAUSE CURL USES LIBPSL TO PROTECT
-			--                 AGAINST HACKING ATTEMPTS RELATED TO COOKIES.
-			--                 DO NOT MERGE THIS BRANCH UNTIL THIS IS FIXED.
-
+			"cmake -S . -B ../../build-curl/%{cfg.longname}/ -G \"Visual Studio 17 2022\" -DBUILD_SHARED_LIBS=OFF -DCURL_STATICLIB=ON -DCURL_USE_LIBPSL=OFF -DCURL_DISABLE_COOKIES=ON -DCMAKE_BUILD_TYPE=%{cfg.longname}",
 			-- TODO: Add an option somehow so -j4 can be changed by the user. -j4 means multi-threaded build with four threads.
 			"cmake --build ../../build-curl/%{cfg.longname}/ --config %{cfg.longname} -j4",
 		}
