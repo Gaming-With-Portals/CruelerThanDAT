@@ -17,6 +17,7 @@
 #include "CTDSettings.h"
 #include "CPKManager.h"
 
+std::vector<FileNode*> openFiles;
 
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 int TEXTURE_CAP = 512;
@@ -24,13 +25,13 @@ int TEXTURE_CAP = 512;
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
 static LPDIRECT3D9              g_pD3D = nullptr;
-static LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
+LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
 static bool                     g_DeviceLost = false;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
 static D3DPRESENT_PARAMETERS    g_d3dpp = {};
 
-static LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
-static LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
+LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
+LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
 
 LPDIRECT3DTEXTURE9 g_RenderTargetTexture = nullptr;
 LPDIRECT3DSURFACE9 g_RenderTargetSurface = nullptr;
@@ -52,8 +53,8 @@ bool hasHandledArguments = false;
 bool showViewport = true;
 
 std::string downloadURL = "";
-static std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
-static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
+std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
+std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 
 ThemeManager* themeManager;
 CPKManager* cpkManager;
@@ -61,128 +62,6 @@ CPKManager* cpkManager;
 
 bool showAllSCRMeshes = false;
 bool cruelerLog = true;
-
-namespace HelperFunction {
-	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess , bool bigEndian) {
-		std::string fileExtension = fileName.substr(fileName.find_last_of("."));
-		uint32_t fileType = 0;
-		FileNode* outputFile = nullptr;
-
-		// fix extension compare
-		size_t nullPos = fileExtension.find('\0');
-		if (nullPos != std::string::npos) {
-			fileExtension = fileExtension.substr(0, nullPos);
-		}
-
-		if (data.size() >= 4) {
-			fileType = *reinterpret_cast<const uint32_t*>(&data[0]);
-		}
-
-
-
-		// TODO: DAT files smaller than 4 bytes (empty) aren't recognized as DAT files
-		if (fileExtension == ".uid") {
-			outputFile = new UidFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileExtension == ".uvd") {
-			outputFile = new UvdFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileType == 5521732) {
-			outputFile = new DatFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileType == 1145588546) {
-			outputFile = new BnkFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile(); 
-		}
-		else if (fileType == 876760407) {
-			outputFile = new WmbFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileType == 5391187) {
-			outputFile = new ScrFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileType == 7630701) {
-			outputFile = new MotFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileType == 5000536 || fileType == 5068866) {
-			outputFile = new BxmFileNode(fileName);
-			outputFile->fileIsBigEndian = false;
-			
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileType == 3299660) {
-			outputFile = new LY2FileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileType == 1481001298) {
-			outputFile = new WemFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			outputFile->LoadFile();
-		}
-		else if (fileType == 4346967) {
-			outputFile = new WtbFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-			//outputFile->LoadFile();
-		}
-		else {
-			outputFile = new UnkFileNode(fileName);
-			if (forceEndianess) {
-				outputFile->fileIsBigEndian = bigEndian;
-			}
-			outputFile->SetFileData(data);
-		}
-		
-
-		
-
-
-		return outputFile;
-	}
-}
 
 void CreateViewportRT(int width, int height)
 {

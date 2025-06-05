@@ -1,19 +1,14 @@
 ﻿#pragma once
 #include "pch.hpp"
 
-
-
+#include "BinaryHandler.h"
 
 #pragma pack(push, 1)
 
 struct CTDMaterial {
     std::string shader_name;
     std::map<unsigned int, unsigned int> texture_data;
-    
-    
-
 };
-
 
 struct WMBVector {
     float x;
@@ -32,16 +27,7 @@ struct WMBVertexA {
     uint32_t normals; // TODO: Deal with
     uint32_t tangents; // TODO: Ignore
 
-    void Read(BinaryReader& br) {
-        position.x = br.ReadFloat();
-        position.y = br.ReadFloat();
-        position.z = br.ReadFloat();
-        uv.u = br.ReadUINT16();
-        uv.v = br.ReadUINT16();
-        normals = br.ReadUINT32();
-        tangents = br.ReadUINT32();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBVertex65847 {
@@ -52,18 +38,7 @@ struct WMBVertex65847 {
     float  boneIndexes;
     float  boneWeights;
 
-    void Read(BinaryReader& br) {
-        position.x = br.ReadFloat();
-        position.y = br.ReadFloat();
-        position.z = br.ReadFloat();
-        uv.u = br.ReadUINT16();
-        uv.v = br.ReadUINT16();
-        normals = br.ReadUINT32();
-        tangents = br.ReadUINT32();
-        boneIndexes = br.ReadFloat();
-        boneWeights = br.ReadFloat();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBVertex66311 {
@@ -74,19 +49,7 @@ struct WMBVertex66311 {
     uint32_t color;
     WMBUV uv2;
     
-    void Read(BinaryReader& br) {
-        position.x = br.ReadFloat();
-        position.y = br.ReadFloat();
-        position.z = br.ReadFloat();
-        uv.u = br.ReadUINT16();
-        uv.v = br.ReadUINT16();
-        normals = br.ReadUINT32();
-        tangents = br.ReadUINT32();
-        color = br.ReadUINT32();
-        uv2.u = br.ReadUINT16();
-        uv2.v = br.ReadUINT16();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBVertex65799 {
@@ -96,17 +59,7 @@ struct WMBVertex65799 {
     uint32_t tangents; // TODO: Ignore
     uint32_t color;
 
-    void Read(BinaryReader& br) {
-        position.x = br.ReadFloat();
-        position.y = br.ReadFloat();
-        position.z = br.ReadFloat();
-        uv.u = br.ReadUINT16();
-        uv.v = br.ReadUINT16();
-        normals = br.ReadUINT32(); // TODO: Deal with
-        tangents = br.ReadUINT32(); // TODO: Ignore
-        color = br.ReadUINT32();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBBatch {
@@ -116,14 +69,7 @@ struct WMBBatch {
     uint32_t numVertices;
     uint32_t numIndices;
 
-    void Read(BinaryReader& br) {
-        vertexGroupIndex = br.ReadUINT32();
-        vertexStart = br.ReadINT32();
-        indexStart = br.ReadINT32();
-        numVertices = br.ReadUINT32();
-        numIndices = br.ReadUINT32();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBBatchData {
@@ -133,14 +79,7 @@ struct WMBBatchData {
     uint16_t boneSetsIndex;
     uint32_t u_a;
 
-    void Read(BinaryReader& br) {
-        batchIndex = br.ReadUINT32();
-        meshIndex = br.ReadUINT32();
-        materialIndex = br.ReadUINT16();
-        boneSetsIndex = br.ReadUINT16();
-        u_a = br.ReadUINT32();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 
@@ -165,28 +104,14 @@ struct WMBMaterial {
     uint16_t u_d;
     uint16_t numParameters;
 
-    void Read(BinaryReader& br) {
-        offsetShaderName = br.ReadUINT32();
-        offsetTextures = br.ReadUINT32();
-        u_a = br.ReadUINT32();
-        offsetParameters = br.ReadUINT32();
-        u_b = br.ReadUINT16();
-        numTextures = br.ReadUINT16();
-        u_d = br.ReadUINT16();
-        numParameters = br.ReadUINT16();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBTexture {
     uint32_t flag;
     uint32_t id;
 
-    void Read(BinaryReader& br) {
-        flag = br.ReadUINT32();
-        id = br.ReadUINT32();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBBoundingBox {
@@ -197,15 +122,7 @@ struct WMBBoundingBox {
     float e;
     float f;
 
-    void Read(BinaryReader& br) {
-        a = br.ReadFloat();
-        b = br.ReadFloat();
-        c = br.ReadFloat();
-        d = br.ReadFloat();
-        e = br.ReadFloat();
-        f = br.ReadFloat();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBMesh {
@@ -222,21 +139,7 @@ struct WMBMesh {
     uint32_t offsetMaterials;
     uint32_t numMaterials;
 
-    void Read(BinaryReader& br) {
-        offsetName = br.ReadUINT32();
-        boundingBox.Read(br);
-        offsetBatches = br.ReadUINT32();
-        numBatches = br.ReadUINT32();
-        offsetBatches1 = br.ReadUINT32();
-        numBatches1 = br.ReadUINT32();
-        offsetBatches2 = br.ReadUINT32();
-        numBatches2 = br.ReadUINT32();
-        offsetBatches3 = br.ReadUINT32();
-        numBatches3 = br.ReadUINT32();
-        offsetMaterials = br.ReadUINT32();
-        numMaterials = br.ReadUINT32();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBVertexGroup {
@@ -248,16 +151,7 @@ struct WMBVertexGroup {
     uint32_t offsetIndexes;
     uint32_t numIndexes;
 
-    void Read(BinaryReader& br) {
-        offsetVertexes = br.ReadUINT32();
-        offsetVertexesExData = br.ReadUINT32();
-        u_a = br.ReadUINT32();
-        u_b = br.ReadUINT32();
-        numVertexes = br.ReadUINT32();
-        offsetIndexes = br.ReadUINT32();
-        numIndexes = br.ReadUINT32();
-    }
-
+    void Read(BinaryReader& br);
 };
 
 struct WMBHeader {
@@ -286,40 +180,6 @@ struct WMBHeader {
     uint32_t offsetMeshes;
     uint32_t numMeshes;
 
-    void Read(BinaryReader& br) {
-        
-        br.ReadUINT32();
-        u_a = br.ReadUINT32();
-        vertexFormat = br.ReadUINT32();
-        u_b = br.ReadUINT16();
-        u_c = br.ReadINT16();
-        pos1.x = br.ReadFloat();
-        pos1.y = br.ReadFloat();
-        pos1.z = br.ReadFloat();
-        pos2.x = br.ReadFloat();
-        pos2.y = br.ReadFloat();
-        pos2.z = br.ReadFloat();
-        offsetVertexGroups = br.ReadUINT32();
-        numVertexGroups = br.ReadUINT32();
-        offsetBatches = br.ReadUINT32();
-        numBatches = br.ReadUINT32();
-        offsetBatchDescription = br.ReadUINT32();
-        offsetBones = br.ReadUINT32();
-        numBones = br.ReadUINT32();
-        offsetBoneIndexTranslateTable = br.ReadUINT32();
-        sizeBoneIndexTranslateTable = br.ReadUINT32();
-        offsetBoneSets = br.ReadUINT32();
-        numBoneSets = br.ReadUINT32();
-        offsetMaterials = br.ReadUINT32();
-        numMaterials = br.ReadUINT32();
-        offsetTextures = br.ReadUINT32();
-        numTextures = br.ReadUINT32();
-        offsetMeshes = br.ReadUINT32();
-        numMeshes = br.ReadUINT32();
-
-    }
-
-
-
+    void Read(BinaryReader& br);
 };
 #pragma pack(pop)
