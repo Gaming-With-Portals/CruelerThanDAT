@@ -25,13 +25,13 @@ int TEXTURE_CAP = 512;
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
 static LPDIRECT3D9              g_pD3D = nullptr;
-static LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
+LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
 static bool                     g_DeviceLost = false;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
 static D3DPRESENT_PARAMETERS    g_d3dpp = {};
 
-static LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
-static LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
+LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
+LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
 
 LPDIRECT3DTEXTURE9 g_RenderTargetTexture = nullptr;
 LPDIRECT3DSURFACE9 g_RenderTargetSurface = nullptr;
@@ -53,8 +53,8 @@ bool hasHandledArguments = false;
 bool showViewport = true;
 
 std::string downloadURL = "";
-static std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
-static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
+std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
+std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 
 ThemeManager* themeManager;
 CPKManager* cpkManager;
