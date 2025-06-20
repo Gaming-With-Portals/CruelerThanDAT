@@ -3,6 +3,8 @@
 #include "pch.hpp"
 
 #include <imgui.h>
+#include <thread>
+#include <future>
 #include "BinaryHandler.h"
 #include "FileUtils.h"
 #include <../CruelerThanDAT.h>
@@ -156,13 +158,13 @@ struct CRIUTFTable {
 };
 
 struct CRIFILE {
-	std::string name;
-	uint64_t location;
-	uint64_t size;
+	std::string name = "";
+	uint64_t location = 0;
+	uint64_t size = 0;
 };
 
 struct CRIFOLDER {
-	std::string name;
+	std::string name = "";
 	std::unordered_map<std::string, CRIFOLDER> subfolders;
 	std::vector<CRIFILE> files;
 };
@@ -189,6 +191,8 @@ enum COLUMN_FLAGS : uint8_t {
 };
 
 class CPKManager {
+	std::future<void> cpkLoadFuture;
+	std::atomic<bool> isLoading = false;
 	char searchBuf[128] = "";
 	CPKMGMTFile activeFile;
 	CPKMGMTFile baseFile;
@@ -196,7 +200,10 @@ class CPKManager {
 	bool isCPKLoaded = false;
 	int totalFileCount = 0;
 	int processedFileCount = 0;
+	std::string lastLoadedFilePath;
 	std::vector<char> fileData;
+	float progressThrobber = 0.0f;
+	bool hasResetProgressBar = true;
 	void MakeTree(const fs::path& dirPath, CPKMGMTFile& node) {
 		if (!fs::exists(dirPath)) {
 			return;
@@ -243,7 +250,13 @@ class CPKManager {
 			if (ImGui::TreeNodeEx(file.name.c_str(), ImGuiTreeNodeFlags_Leaf)) {
 
 				if (ImGui::IsItemClicked()) {
-					activeFile = file;
+					if (file.path != lastLoadedFilePath) {
+						activeFile = file;
+						isCPKLoaded = false;
+						isLoading = false;
+						fileData.clear();
+						lastLoadedFilePath = file.path;
+					}
 				}
 
 				ImGui::TreePop();
@@ -377,7 +390,9 @@ class CPKManager {
 
 	void LoadCPK() {
 		totalFileCount = 0;
-		ReadFileIntoVector(activeFile.path, fileData);
+		if (!ReadFileIntoVector(activeFile.path, fileData)) {
+			return;
+		}
 		BinaryReader br = BinaryReader(fileData, false);
 		if (br.ReadString(4) != "CPK ") {
 			return;
@@ -527,6 +542,7 @@ class CPKManager {
 	}
 
 	bool FolderMatchesSearch(const CRIFOLDER& folder, const std::string& searchQuery) {
+
 		if (folder.name.find(searchQuery) != std::string::npos)
 			return true;
 
@@ -579,6 +595,13 @@ class CPKManager {
 				}
 			}
 		}
+	}
+
+	float GetProgress() const {
+		if (totalFileCount == 0) return 0.0f;
+		if (processedFileCount == totalFileCount) return 0.0f;
+
+		return static_cast<float>(processedFileCount) / static_cast<float>(totalFileCount);
 	}
 
 	void RipCPK_Folders(CRIFOLDER cri, fs::path basePath) {
@@ -678,10 +701,18 @@ public:
 		else {
 			ImGui::SeparatorText(activeFile.name.c_str());
 			ImGui::InputText("Search", searchBuf, sizeof(searchBuf));
+			globalProgress = 1.0f;
 			if (ImGui::Button("Unload")) {
 				isCPKLoaded = false;
-				activeFile.type = 9;
 				fileData.clear();
+				openFiles.clear(); 
+
+				cpkBase = CRIFOLDER();
+				activeFile = CPKMGMTFile();
+				activeFile.type = 9; 
+
+				processedFileCount = 0;
+				totalFileCount = 0;
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("Rip")) {
@@ -728,10 +759,29 @@ public:
 
 			}
 
-			if (!isCPKLoaded) {
-				LoadCPK();
-				isCPKLoaded = true;
+			if (!isCPKLoaded && !isLoading) {
+				isLoading = true;
+				cpkLoadFuture = std::async(std::launch::async, [this]() {
+					LoadCPK();
+					isCPKLoaded = true;
+					isLoading = false;
+					});
 			}
+
+			if (isLoading) {
+				
+				globalProgress = GetProgress();
+				hasResetProgressBar = false;
+				if (globalProgress == 0.0f) {
+					globalProgress = progressThrobber;
+					progressThrobber += 0.01;
+					if (progressThrobber > 1.0f) {
+						progressThrobber = 0.0f;
+					}
+				}
+
+			}
+
 
 			DrawFolder(cpkBase, std::string(searchBuf), true);
 

@@ -28,9 +28,16 @@ static LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
 static bool                     g_DeviceLost = false;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
 static D3DPRESENT_PARAMETERS    g_d3dpp = {};
+static bool hasReset = false;
+
+HWND hwnd;
 
 static LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
 static LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
+
+static int RES_X = 1600;
+static int RES_Y = 900;
+static float globalProgress = 0.0f;
 
 LPDIRECT3DTEXTURE9 g_RenderTargetTexture = nullptr;
 LPDIRECT3DSURFACE9 g_RenderTargetSurface = nullptr;
@@ -53,6 +60,7 @@ bool showViewport = true;
 
 std::string downloadURL = "";
 static std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
+static LPDIRECT3DTEXTURE9 applicationIcon;
 static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 
 ThemeManager* themeManager;
@@ -63,7 +71,7 @@ bool showAllSCRMeshes = false;
 bool cruelerLog = true;
 
 namespace HelperFunction {
-	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess , bool bigEndian) {
+	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess, bool bigEndian) {
 		std::string fileExtension = fileName.substr(fileName.find_last_of("."));
 		uint32_t fileType = 0;
 		FileNode* outputFile = nullptr;
@@ -111,7 +119,7 @@ namespace HelperFunction {
 				outputFile->fileIsBigEndian = bigEndian;
 			}
 			outputFile->SetFileData(data);
-			outputFile->LoadFile(); 
+			outputFile->LoadFile();
 		}
 		else if (fileType == 876760407) {
 			outputFile = new WmbFileNode(fileName);
@@ -140,7 +148,7 @@ namespace HelperFunction {
 		else if (fileType == 5000536 || fileType == 5068866) {
 			outputFile = new BxmFileNode(fileName);
 			outputFile->fileIsBigEndian = false;
-			
+
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
@@ -175,21 +183,24 @@ namespace HelperFunction {
 			}
 			outputFile->SetFileData(data);
 		}
-		
 
-		
+
+
 
 
 		return outputFile;
 	}
 }
 
+
+
+
 void CreateViewportRT(int width, int height)
 {
-    g_pd3dDevice->CreateTexture(width, height, 1, D3DUSAGE_RENDERTARGET,
-        D3DFMT_A32B32G32R32F, D3DPOOL_DEFAULT, &g_RenderTargetTexture, NULL);
+	g_pd3dDevice->CreateTexture(width, height, 1, D3DUSAGE_RENDERTARGET,
+		D3DFMT_A32B32G32R32F, D3DPOOL_DEFAULT, &g_RenderTargetTexture, NULL);
 
-    g_RenderTargetTexture->GetSurfaceLevel(0, &g_RenderTargetSurface);
+	g_RenderTargetTexture->GetSurfaceLevel(0, &g_RenderTargetSurface);
 }
 
 FileNode* FileNodeFromFilepath(std::string filePath) {
@@ -362,14 +373,14 @@ void SelfUpdate() {
 			if (downloadURL != "") {
 				SHOULD_UPDATE = true;
 			}
-			
+
 		}
-		
+
 
 	}
 
 
-	
+
 }
 int lastMouseX = 0;
 int lastMouseY = 0;
@@ -380,77 +391,77 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
 		return true;
 
-    switch (msg)
-    {
-    case WM_LBUTTONDOWN:
-    {
-        isDragging = true;
-        lastMouseX = LOWORD(lParam);
-        lastMouseY = HIWORD(lParam);
-        SetCapture(hWnd); // lock mouse input to window
-        break;
-    }
+	switch (msg)
+	{
+	case WM_LBUTTONDOWN:
+	{
+		isDragging = true;
+		lastMouseX = LOWORD(lParam);
+		lastMouseY = HIWORD(lParam);
+		SetCapture(hWnd); // lock mouse input to window
+		break;
+	}
 
-    case WM_LBUTTONUP:
-    {
-        isDragging = false;
-        ReleaseCapture();
-        break;
-    }
+	case WM_LBUTTONUP:
+	{
+		isDragging = false;
+		ReleaseCapture();
+		break;
+	}
 
-    case WM_MOUSEMOVE:
-    {
-        if (isDragging)
-        {
-            int x = LOWORD(lParam);
-            int y = HIWORD(lParam);
+	case WM_MOUSEMOVE:
+	{
+		if (isDragging)
+		{
+			int x = LOWORD(lParam);
+			int y = HIWORD(lParam);
 
-            int dx = x - lastMouseX;
-            int dy = y - lastMouseY;
+			int dx = x - lastMouseX;
+			int dy = y - lastMouseY;
 
-            lastMouseX = x;
-            lastMouseY = y;
+			lastMouseX = x;
+			lastMouseY = y;
 
-            float sensitivity = 0.01f;
-            yaw += dx * sensitivity;
-            pitch += dy * sensitivity;
-        }
-        break;
-    }
-    case WM_MOUSEWHEEL:
-    {
-        short delta = GET_WHEEL_DELTA_WPARAM(wParam); // +120 or -120
-        float scrollSpeed = 5.0f; // tweak for sensitivity
-        radius -= (delta / 120.0f) * scrollSpeed;
+			float sensitivity = 0.01f;
+			yaw += dx * sensitivity;
+			pitch += dy * sensitivity;
+		}
+		break;
+	}
+	case WM_MOUSEWHEEL:
+	{
+		short delta = GET_WHEEL_DELTA_WPARAM(wParam); // +120 or -120
+		float scrollSpeed = 5.0f; // tweak for sensitivity
+		radius -= (delta / 120.0f) * scrollSpeed;
 
 
-        radius = std::max(2.0f, std::min(1000.0f, radius));
-        break;
-    }
+		radius = std::max(2.0f, std::min(1000.0f, radius));
+		break;
+	}
 
-    case WM_SIZE:
-        if (wParam == SIZE_MINIMIZED)
-            return 0;
-        g_ResizeWidth = (UINT)LOWORD(lParam); // Queue resize
-        g_ResizeHeight = (UINT)HIWORD(lParam);
-        return 0;
-    case WM_SYSCOMMAND:
-        if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
-            return 0;
-        break;
-    case WM_DESTROY:
-        ::PostQuitMessage(0);
-        return 0;
-    case WM_CREATE:
-        DragAcceptFiles(hWnd, TRUE);  // Enable drag-and-drop
-        break;
-    case WM_DROPFILES: {
-        HDROP hDrop = (HDROP)wParam;
-        wchar_t filePath[MAX_PATH] = { 0 };
+	case WM_SIZE:
+		if (wParam == SIZE_MINIMIZED)
+			return 0;
+		g_ResizeWidth = (UINT)LOWORD(lParam); // Queue resize
+		g_ResizeHeight = (UINT)HIWORD(lParam);
+		return 0;
+	case WM_SYSCOMMAND:
+		if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
+			return 0;
+		break;
+	case WM_DESTROY:
+		::PostQuitMessage(0);
+		return 0;
+	case WM_CREATE:
+		DragAcceptFiles(hWnd, TRUE);  // Enable drag-and-drop
+		break;
+	case WM_DROPFILES: {
+		HDROP hDrop = (HDROP)wParam;
+		wchar_t filePath[MAX_PATH] = { 0 };
 
 		// Get the first dropped file (you can loop for multiple files)
 		if (DragQueryFileW(hDrop, 0, filePath, MAX_PATH)) {
-			
+
 			openFiles.push_back(FileNodeFromFilepath(WCharToString(filePath)));
 			if (appConfig.AutomaticallyLoadTextures) {
 				PopulateTextures();
@@ -461,7 +472,14 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		DragFinish(hDrop); // Free resources
 		break;
-		}
+	}
+	case WM_EXITSIZEMOVE:
+	case WM_CAPTURECHANGED:
+		// Tell ImGui to clear mouse drag/active states here
+		ImGui::GetIO().MouseDown[0] = false;
+		ImGui::GetIO().MouseDown[1] = false;
+		ImGui::GetIO().MouseDown[2] = false;
+		break;
 	}
 	return ::DefWindowProcW(hWnd, msg, wParam, lParam);
 }
@@ -470,7 +488,7 @@ bool CreateDeviceD3D(HWND hWnd)
 {
 	if ((g_pD3D = Direct3DCreate9(D3D_SDK_VERSION)) == nullptr)
 		return false;
-	
+
 	// Create the D3DDevice
 	ZeroMemory(&g_d3dpp, sizeof(g_d3dpp));
 	g_d3dpp.Windowed = TRUE;
@@ -479,6 +497,8 @@ bool CreateDeviceD3D(HWND hWnd)
 	g_d3dpp.EnableAutoDepthStencil = TRUE;
 	g_d3dpp.AutoDepthStencilFormat = D3DFMT_D16;
 	g_d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_ONE;           // Present with vsync
+	g_d3dpp.BackBufferWidth = 1600;
+	g_d3dpp.BackBufferHeight = 900;
 	//g_d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;   // Present without vsync, maximum unthrottled framerate
 	if (g_pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &g_d3dpp, &g_pd3dDevice) < 0)
 		return false;
@@ -511,6 +531,7 @@ void CleanupDeviceD3D()
 
 void ResetDevice()
 {
+
 	ImGui_ImplDX9_InvalidateDeviceObjects();
 	HRESULT hr = g_pd3dDevice->Reset(&g_d3dpp);
 	if (hr == D3DERR_INVALIDCALL)
@@ -527,17 +548,17 @@ void RenderFrame() {
 
 
 
-    static float fov = 50.0f;
-    static float index = 180.0f;  
-    //static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
-    static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
+	static float fov = 50.0f;
+	static float index = 180.0f;
+	//static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
+	static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
 	(void)cameraVec;
-    static bool spinModel = false;
-    g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
-    g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
-    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
-    g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+	static bool spinModel = false;
+	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
+	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
+	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
 
 	// Start the ImGui frame
 	ImGui_ImplDX9_NewFrame();
@@ -545,12 +566,12 @@ void RenderFrame() {
 	ImGui::NewFrame();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth), 36));
+	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth), 26));
 
 	ImGui::Begin("TabCtrl", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
-	
+
 	if (SHOULD_UPDATE) {
-		
+
 		if (ImGui::Button("Update")) {
 			SHOULD_UPDATE = false;
 			URLDownloadToFileA(NULL, downloadURL.c_str(), "update.zip", NULL, NULL);
@@ -561,8 +582,38 @@ void RenderFrame() {
 		ImGui::SameLine();
 	}
 
-	ImGui::Text("Textures Loaded: %zu/%d", textureMap.size(), TEXTURE_CAP);
+	if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+		ReleaseCapture();
+		PostMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+	}
 
+	//ImGui::Text("Textures Loaded: %zu/%d", textureMap.size(), TEXTURE_CAP);
+	
+	ImGui::Image((ImTextureID)(intptr_t)applicationIcon, ImVec2(16, 16));
+	ImGui::SameLine();
+	ImGui::SetCursorPosY(9);
+	ImGui::Text("CruelerThanDAT");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(240);
+	ImGui::SetCursorPosY(-1);
+	ImGui::SetCursorPosX(0);
+
+	ImGui::ProgressBar(globalProgress, ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth), 4.0f), "");
+
+	float spacing = 4.0f;
+	float btnW = 36.0f;
+	float totalBtnWidth = (btnW * 2.0f) + spacing;
+
+	ImGui::SameLine(ImGui::GetContentRegionAvail().x - totalBtnWidth);
+
+	if (ImGui::Button("_", ImVec2(btnW, 0))) {
+		ShowWindow(GetActiveWindow(), SW_MINIMIZE); 
+	}
+	ImGui::SameLine();
+
+	if (ImGui::Button("X", ImVec2(btnW, 0))) {
+		PostQuitMessage(0);
+	}
 
 	ImGui::End();
 
@@ -572,7 +623,7 @@ void RenderFrame() {
 	ImGui::Begin("DatView", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
 
 	if (ImGui::BeginTabBar("primary_control")) {
-		
+
 		if (ImGui::BeginTabItem("Data Viewer")) {
 			if (openFiles.size() == 0) {
 				ImGui::Text("No open files yet!");
@@ -637,7 +688,7 @@ void RenderFrame() {
 		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, static_cast<float>(g_d3dpp.BackBufferHeight) - 75));
 		window_height = g_d3dpp.BackBufferHeight - 80;
 	}
-	
+
 	if (showViewport == false) {
 		ImGui::SetNextWindowBgAlpha(0.1f);
 	}
@@ -647,14 +698,14 @@ void RenderFrame() {
 
 	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
-    if (g_RenderTargetSurface == nullptr || g_RenderTargetTexture == nullptr) {
-        CreateViewportRT(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
-    }
-    LPDIRECT3DSURFACE9 g_OriginalBackBuffer = nullptr;
-    g_pd3dDevice->GetRenderTarget(0, &g_OriginalBackBuffer);
-    g_pd3dDevice->SetRenderTarget(0, g_RenderTargetSurface);
-    g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
-        D3DCOLOR_XRGB(50, 50, 50), 1.0f, 0);
+	if (g_RenderTargetSurface == nullptr || g_RenderTargetTexture == nullptr) {
+		CreateViewportRT(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+	}
+	LPDIRECT3DSURFACE9 g_OriginalBackBuffer = nullptr;
+	g_pd3dDevice->GetRenderTarget(0, &g_OriginalBackBuffer);
+	g_pd3dDevice->SetRenderTarget(0, g_RenderTargetSurface);
+	g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
+		D3DCOLOR_XRGB(50, 50, 50), 1.0f, 0);
 
 	if (FileNode::selectedNode) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
@@ -693,7 +744,7 @@ void RenderFrame() {
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
 			showViewport = false;
 			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
-			
+
 			if (ImGui::BeginTabBar("wmb_editor")) {
 				if (ImGui::BeginTabItem("Meshes")) {
 					wmbNode->RenderGUI();
@@ -701,6 +752,8 @@ void RenderFrame() {
 				}
 
 				if (ImGui::BeginTabItem("Materials")) {
+					ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
+					ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
 					if (ImGui::Button("Fetch Textures")) {
 
 						PopulateTextures();
@@ -708,8 +761,8 @@ void RenderFrame() {
 
 
 					int i = 0;
-					for (CTDMaterial &mat : wmbNode->materials) {
-						
+					for (CTDMaterial& mat : wmbNode->materials) {
+
 						if (ImGui::TreeNode((("Material " + std::to_string(i))).c_str())) {
 
 							ImGui::Text("Shader Name: %s", mat.shader_name.c_str());
@@ -725,14 +778,23 @@ void RenderFrame() {
 
 							ImGui::TreePop();
 						}
-						
+
 						i += 1;
 					}
 
+					ImGui::EndChild();
+					ImGui::PopStyleColor();
 
 					ImGui::EndTabItem();
 				}
 
+				if (ImGui::BeginTabItem("Skeleton")) {
+					
+					wmbNode->RenderBoneGUI();
+
+
+					ImGui::EndTabItem();
+				}
 
 				if (wmbNode->isSCR) {
 					if (ImGui::BeginTabItem("SCR Options")) {
@@ -742,12 +804,12 @@ void RenderFrame() {
 					}
 				}
 
-                if (ImGui::BeginTabItem("Visualizer")) {
-                    ImGui::SetNextItemWidth(120.0f);
-                    ImGui::SliderFloat("FOV", &fov, 20.0f, 100.0f);
-                    ImGui::Checkbox("Spin Model?", &spinModel);
-                    ImGui::EndTabItem();
-                }
+				if (ImGui::BeginTabItem("Visualizer")) {
+					ImGui::SetNextItemWidth(120.0f);
+					ImGui::SliderFloat("FOV", &fov, 20.0f, 100.0f);
+					//ImGui::Checkbox("Spin Model?", &spinModel);
+					ImGui::EndTabItem();
+				}
 
 				ImGui::EndTabBar();
 			}
@@ -758,31 +820,31 @@ void RenderFrame() {
 
 	}
 
-    ImVec2 pos = ImVec2(350, 36);
-    ImVec2 size = ImGui::GetWindowSize();
-    ImGui::GetBackgroundDrawList()->AddImage(
-        (void*)g_RenderTargetTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y));
+	ImVec2 pos = ImVec2(350, 36);
+	ImVec2 size = ImGui::GetWindowSize();
+	ImGui::GetBackgroundDrawList()->AddImage(
+		(void*)g_RenderTargetTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y));
 
 
 	ImGui::End();
 
 
-	
+
 	if (cruelerLog) {
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 
-		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(g_d3dpp.BackBufferHeight )- 300));
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth )- 350, 300));
+		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(g_d3dpp.BackBufferHeight) - 300));
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, 300));
 		ImGui::Begin("CruelerThanDAT Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
-		
-		if (ImGui::Button(ICON_CI_TERMINAL, ImVec2(25, 25))){
+
+		if (ImGui::Button(ICON_CI_TERMINAL, ImVec2(25, 25))) {
 			cruelerLog = false;
 		}
 		ImGui::SameLine();
-		
+
 		if (ImGui::Button(ICON_CI_CLEAR_ALL, ImVec2(25, 25))) {
 			CTDLog::Log::getInstance().logEntries.clear();
 		}
@@ -796,7 +858,7 @@ void RenderFrame() {
 			else {
 				ImGui::TextColored(log->color, "%s", log->text.c_str());
 			}
-			
+
 		}
 
 		ImGui::PopStyleColor(4);
@@ -818,10 +880,10 @@ void RenderFrame() {
 	}
 
 
-    //ImGui::Image((void*)g_RenderTargetTexture, ImVec2(128, 128));
+	//ImGui::Image((void*)g_RenderTargetTexture, ImVec2(128, 128));
 
 	ImGui::End();
-	
+
 	if (spinModel) {
 		index += 0.5f;
 		if (index > 360.0f) {
@@ -840,47 +902,47 @@ void RenderFrame() {
 
 	D3DXMATRIX matView;    // the view transform matrix
 
-    pitch = std::max(-D3DX_PI * 0.49f, std::min(D3DX_PI * 0.49f, pitch));
+	pitch = std::max(-D3DX_PI * 0.49f, std::min(D3DX_PI * 0.49f, pitch));
 
-    float x = radius * cosf(pitch) * sinf(yaw);
-    float y = radius * sinf(pitch);
-    float z = radius * cosf(pitch) * cosf(yaw);
-    cameraPos = D3DXVECTOR3(x, y, z) + target;
+	float x = radius * cosf(pitch) * sinf(yaw);
+	float y = radius * sinf(pitch);
+	float z = radius * cosf(pitch) * cosf(yaw);
+	cameraPos = D3DXVECTOR3(x, y, z) + target;
 
-    D3DXVECTOR3 up(0.0f, 1.0f, 0.0f);
-    D3DXMatrixLookAtLH(&view, &cameraPos, &target, &up);
-    g_pd3dDevice->SetTransform(D3DTS_VIEW, &view);
+	D3DXVECTOR3 up(0.0f, 1.0f, 0.0f);
+	D3DXMatrixLookAtLH(&view, &cameraPos, &target, &up);
+	g_pd3dDevice->SetTransform(D3DTS_VIEW, &view);
 
 	D3DXMATRIX matProjection;     // the projection transform matrix
 
-    D3DXMatrixPerspectiveFovLH(&matProjection,
-        D3DXToRadian(fov),    // the horizontal field of view
-        (FLOAT)size.x / (FLOAT)size.y, // aspect ratio
-        1.0f,    // the near view-plane
-        5000.0f);    // the far view-plane
+	D3DXMatrixPerspectiveFovLH(&matProjection,
+		D3DXToRadian(fov),    // the horizontal field of view
+		(FLOAT)size.x / (FLOAT)size.y, // aspect ratio
+		1.0f,    // the near view-plane
+		5000.0f);    // the far view-plane
 
 	g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &matProjection);
-	
 
 
 
 
-    g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-    D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
-    g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
-    g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
-	
+
+	g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+	D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
+	g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
+	g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
+
 	g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
-		D3DCOLORWRITEENABLE_RED | 
-		D3DCOLORWRITEENABLE_GREEN | 
+		D3DCOLORWRITEENABLE_RED |
+		D3DCOLORWRITEENABLE_GREEN |
 		D3DCOLORWRITEENABLE_BLUE);
-    if (g_pd3dDevice->BeginScene() >= 0)
-    {
+	if (g_pd3dDevice->BeginScene() >= 0)
+	{
 		const float pointSize = 5.0f;
-		g_pd3dDevice->SetRenderState(D3DRS_POINTSIZE, *reinterpret_cast<const DWORD *>(&pointSize));
-        g_pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);  // unless you're using normals and lights
-        g_pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE); // disable backface culling for now
-        g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, TRUE);
+		g_pd3dDevice->SetRenderState(D3DRS_POINTSIZE, *reinterpret_cast<const DWORD*>(&pointSize));
+		g_pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);  // unless you're using normals and lights
+		g_pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE); // disable backface culling for now
+		g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, TRUE);
 
 		if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
 			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
@@ -897,28 +959,28 @@ void RenderFrame() {
 			else {
 				wmbNode->RenderMesh();
 			}
-			
+
 
 
 		}
 
-        g_pd3dDevice->EndScene();
-		
+		g_pd3dDevice->EndScene();
+
 		g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
-			D3DCOLORWRITEENABLE_RED | 
-			D3DCOLORWRITEENABLE_GREEN | 
+			D3DCOLORWRITEENABLE_RED |
+			D3DCOLORWRITEENABLE_GREEN |
 			D3DCOLORWRITEENABLE_BLUE |
 			D3DCOLORWRITEENABLE_ALPHA);
 
-        g_pd3dDevice->SetRenderTarget(0, g_OriginalBackBuffer);
-        g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
-            D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
-        ImGui::EndFrame();
-        g_pd3dDevice->BeginScene();
+		g_pd3dDevice->SetRenderTarget(0, g_OriginalBackBuffer);
+		g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
+			D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
+		ImGui::EndFrame();
+		g_pd3dDevice->BeginScene();
 
 
-        g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
-        g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+		g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
+		g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 
 
 		ImGui::Render();
@@ -971,7 +1033,7 @@ int main(int argc, char* argv[])
 
 	themeManager = new ThemeManager();
 	themeManager->UpdateThemeList();
-	
+
 
 	appConfig.Read();
 
@@ -985,7 +1047,7 @@ int main(int argc, char* argv[])
 
 	WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
 	::RegisterClassExW(&wc);
-	HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"CruelerThanDAT", WS_OVERLAPPEDWINDOW, 100, 100, 1600, 900, nullptr, nullptr, wc.hInstance, nullptr);
+	hwnd = ::CreateWindowW(wc.lpszClassName, L"CruelerThanDAT", WS_OVERLAPPEDWINDOW, 100, 100, 1600, 900, nullptr, nullptr, wc.hInstance, nullptr);
 
 
 	// Initialize Direct3D
@@ -995,6 +1057,18 @@ int main(int argc, char* argv[])
 		::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 		return 1;
 	}
+
+	LONG style = GetWindowLong(hwnd, GWL_STYLE);
+	style &= ~(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+	SetWindowLong(hwnd, GWL_STYLE, style);
+
+	// Optional: Remove extended styles like WS_EX_DLGMODALFRAME
+	LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+	exStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+	SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+
+	// Force update
+	SetWindowPos(hwnd, nullptr, 0, 0, 1600, 900, SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
 
 	::ShowWindow(hwnd, SW_SHOWDEFAULT);
 	::UpdateWindow(hwnd);
@@ -1011,7 +1085,7 @@ int main(int argc, char* argv[])
 
 	ImGui_ImplWin32_Init(hwnd);
 	ImGui_ImplDX9_Init(g_pd3dDevice);
-	
+
 	// Load Fonts
 	io.Fonts->AddFontDefault();
 
@@ -1034,15 +1108,15 @@ int main(int argc, char* argv[])
 #endif
 
 
-	
+
 	themeManager->ChooseStyle(1);
 
 	LPDIRECT3DTEXTURE9 pTexture;
 	HRESULT hr = D3DXCreateTextureFromFile(g_pd3dDevice, L"Assets/img.dds", &pTexture);
-
+	D3DXCreateTextureFromFile(g_pd3dDevice, L"Assets/CruelerThanDAT.png", &applicationIcon);
 	if (FAILED(hr)) {
 		MessageBox(0, L"Failed to load texture!", L"Error", MB_OK);
-		
+
 	}
 
 	printf("Loading basic texture...");
@@ -1086,11 +1160,12 @@ int main(int argc, char* argv[])
 			g_DeviceLost = false;
 		}
 
-		if (g_ResizeWidth != 0 && g_ResizeHeight != 0)
+		if (g_ResizeWidth != 0 && g_ResizeHeight != 0 && !hasReset)
 		{
 			g_d3dpp.BackBufferWidth = g_ResizeWidth;
 			g_d3dpp.BackBufferHeight = g_ResizeHeight;
 			g_ResizeWidth = g_ResizeHeight = 0;
+			hasReset = true;
 			ResetDevice();
 		}
 
@@ -1109,5 +1184,4 @@ int main(int argc, char* argv[])
 	}
 
 }
-
 

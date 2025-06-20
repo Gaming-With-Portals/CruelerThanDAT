@@ -25,6 +25,7 @@ int IntLength(int value) {
 	return length;
 }
 
+
 bool HelperFunction::WriteVectorToFile(const std::vector<char> dataVec, const std::string& filename) {
 	std::string fullPath = filename;
 
@@ -33,6 +34,30 @@ bool HelperFunction::WriteVectorToFile(const std::vector<char> dataVec, const st
 
 	out.write(dataVec.data(), dataVec.size());
 	return out.good();
+}
+
+bool HelperFunction::WorldToScreen(const D3DXVECTOR3& worldPos, D3DXVECTOR3& screenPos, const D3DXMATRIX& view, const D3DXMATRIX& proj, const D3DVIEWPORT9& viewport)
+{
+	D3DXMATRIX viewProj;
+	D3DXMatrixMultiply(&viewProj, &view, &proj);
+
+	D3DXVECTOR4 temp;
+	D3DXVec3Transform(&temp, &worldPos, &viewProj);
+
+	if (temp.w <= 0.0f)
+		return false;
+
+	// Perspective divide
+	temp.x /= temp.w;
+	temp.y /= temp.w;
+	temp.z /= temp.w;
+
+	// Convert to screen space
+	screenPos.x = viewport.X + (1.0f + temp.x) * viewport.Width / 2.0f;
+	screenPos.y = viewport.Y + (1.0f - temp.y) * viewport.Height / 2.0f;
+	screenPos.z = temp.z;
+
+	return true;
 }
 
 std::vector<std::string> BXMInternal::SplitString(const std::string& str, char delimiter) {

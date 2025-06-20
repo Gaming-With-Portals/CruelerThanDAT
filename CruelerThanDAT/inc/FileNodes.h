@@ -26,7 +26,6 @@ class FileNode;  // Forward declaration
 class UvdFileNode;  // Forward declaration
 extern std::vector<FileNode*> openFiles;
 
-
 namespace BXMInternal {
 	static const std::vector<std::string> possibleParams = {
 	"RoomNo",
@@ -59,6 +58,8 @@ namespace BXMInternal {
 void closeNode(FileNode* target);
 
 namespace HelperFunction {
+	bool WorldToScreen(const D3DXVECTOR3& worldPos, D3DXVECTOR3& screenPos, const D3DXMATRIX& view, const D3DXMATRIX& proj, const D3DVIEWPORT9& viewport);
+
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess = false, bool bigEndian = false);
 
 	int Align(int value, int alignment);
@@ -85,7 +86,6 @@ enum FileNodeTypes {
 };
 
 int IntLength(int);
-
 
 class FileNode {
 public:
@@ -1409,6 +1409,17 @@ public:
 
 };
 
+struct CruelerBone {
+	int parentIndex;
+	int boneID;
+	bool selected = false;
+	D3DXVECTOR3 localPosition;
+	D3DXVECTOR3 worldPosition;
+	D3DXMATRIX localTransform;
+	D3DXMATRIX combinedTransform;
+	D3DXMATRIX offsetMatrix; 
+};
+
 class CruelerBatch {
 	// i hate everything
 	// I can count how many seconds until I kill myself on one hand
@@ -1442,7 +1453,10 @@ public:
 	WMBVector meshRotation;
 	std::vector<CruelerMesh*> displayMeshes;
 	std::vector<CTDMaterial> materials;
+	std::vector<CruelerBone> bones;
+	std::unordered_map<int, std::string> boneNames;
 	FileNode* scrNode;
+	std::string boneNameSourceFile = "";
 	bool isSCR = false;
 	float rotationAngle = 0;;
 	float scaleFactor = 0.4f;
@@ -1453,10 +1467,62 @@ public:
 		nodeType = WMB;
 		fileFilter = L"Platinum Model File(*.wmb)\0*.wmb;\0";
 	}
+
+	void GetBoneNames() {
+		std::ifstream cfgfile("Assets/WMB/bone_config.json");
+		boneNameSourceFile = "Assets/WMB/bone_names.json";
+;		if (cfgfile.is_open()) {
+			nlohmann::json j;
+			cfgfile >> j;
+			for (auto& [key, value] : j.items()) {
+				std::string targetfilename = key;
+				std::string jsonname = value.get<std::string>();
+
+				if (targetfilename == fileName) {
+					boneNameSourceFile =  "Assets/WMB/" + jsonname;
+					break;
+				}
+
+			}
+		}
+
+		cfgfile.close();
+
+		std::ifstream file(boneNameSourceFile);
+		if (file.is_open()) {
+			nlohmann::json j;
+			file >> j;
+
+			for (auto& [key, value] : j.items()) {
+				int id = std::stoi(key);            // JSON keys are strings
+				std::string name = value.get<std::string>();
+				boneNames[id] = name;
+			}
+			
+		}
+
+		file.close();
+
+	}
+
+	std::string GetBoneNameFromID(int boneID) {
+		if (boneNames.find(boneID) != boneNames.end()) {
+			return boneNames[boneID];
+		}
+	
+
+
+		std::stringstream ss;
+		ss << std::setw(4) << std::setfill('0') << boneID;
+
+		return "bone" + ss.str();
+	}
+
 	void LoadFile() override {
 		BinaryReader reader(fileData, true);
 		reader.SetEndianess(fileIsBigEndian);
 
+		GetBoneNames();
 
 		WMBHeader header = WMBHeader();
 		header.Read(reader);
@@ -1487,6 +1553,33 @@ public:
 			itm.Read(reader);
 			batchDatas.push_back(itm);
 		}
+
+		reader.Seek(header.offsetBones);
+		for (uint32_t i = 0; i < header.numBones; i++) {
+			CruelerBone bone = CruelerBone();
+			bone.boneID = reader.ReadINT16();
+			reader.ReadINT16();
+			bone.parentIndex = reader.ReadINT16();
+			reader.ReadUINT16(); // Unknown
+			bone.localPosition = D3DXVECTOR3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
+			bone.worldPosition = D3DXVECTOR3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
+
+			D3DXMatrixTranslation(&bone.localTransform, bone.localPosition.x, bone.localPosition.y, bone.localPosition.z);
+
+			bones.push_back(bone);
+		}
+		for (uint32_t i = 0; i < header.numBones; i++) {
+			if (bones[i].parentIndex >= 0) {
+				bones[i].combinedTransform = bones[bones[i].parentIndex].combinedTransform * bones[i].localTransform;
+			}
+			else {
+				bones[i].combinedTransform = bones[i].localTransform;
+			}
+		}
+		for (uint32_t i = 0; i < header.numBones; i++) {
+			D3DXMatrixInverse(&bones[i].offsetMatrix, nullptr, &bones[i].combinedTransform);
+		}
+
 
 		reader.Seek(header.offsetMeshes);
 		std::vector<WMBMesh> meshes;
@@ -1896,6 +1989,19 @@ public:
 
 			}
 
+			/*if (ImGui::Button("Send to MGR2Blender", ImVec2(150, 20))) {
+
+
+
+				std::ofstream script("blender_launcher.py");
+				script << "import bpy\n";
+				script << "bpy.ops.import_scene.wmb_data(filepath=r'" << modelPath << "', reset_blend=True)\n";
+				script.close();
+
+				std::string command = "\"" + blenderPath + "\" --python \"" + "blender_launcher.py" + "\"";
+				system(command.c_str());
+			}*/
+
 			if (it != openFiles.end()) { // Ensure it exists before erasing
 				if (ImGui::Button("Close", ImVec2(150, 20))) {
 					closeNode(this);
@@ -1960,10 +2066,114 @@ public:
 
 		}
 
+		ImDrawList* drawList = ImGui::GetForegroundDrawList();
+		D3DXMATRIX view, proj;
+		g_pd3dDevice->GetTransform(D3DTS_VIEW, &view);
+		g_pd3dDevice->GetTransform(D3DTS_PROJECTION, &proj);
+		D3DVIEWPORT9 viewport;
+		g_pd3dDevice->GetViewport(&viewport);
+
+		for (size_t i = 0; i < bones.size(); ++i)
+		{
+			int parentIdx = bones[i].parentIndex;
+			if (parentIdx < 0) continue;
+
+			D3DXVECTOR3 bonePos = D3DXVECTOR3(
+				bones[i].combinedTransform._41,
+				bones[i].combinedTransform._42,
+				bones[i].combinedTransform._43);
+
+			D3DXVECTOR3 parentPos = D3DXVECTOR3(
+				bones[parentIdx].combinedTransform._41,
+				bones[parentIdx].combinedTransform._42,
+				bones[parentIdx].combinedTransform._43);
+
+			D3DXMATRIX fixRot;
+			D3DXMatrixRotationY(&fixRot, D3DXToRadian(90));
+
+			D3DXVECTOR4 fixedBonePos4, fixedParentPos4;
+			D3DXVec3Transform(&fixedBonePos4, &bonePos, &fixRot);
+			D3DXVec3Transform(&fixedParentPos4, &parentPos, &fixRot);
+
+			D3DXVECTOR3 fixedBonePos(fixedBonePos4.x, fixedBonePos4.y, fixedBonePos4.z);
+			D3DXVECTOR3 fixedParentPos(fixedParentPos4.x, fixedParentPos4.y, fixedParentPos4.z);
+
+			// Now project
+			D3DXVECTOR3 screenA, screenB;
+			if (HelperFunction::WorldToScreen(fixedBonePos, screenA, view, proj, viewport) &&
+				HelperFunction::WorldToScreen(fixedParentPos, screenB, view, proj, viewport))
+			{
+				if (bones[i].selected) {
+					drawList->AddLine(
+						ImVec2(screenA.x + 350, screenA.y + 36),
+						ImVec2(screenB.x + 350, screenB.y + 36),
+						IM_COL32(255, 255, 0, 255), // red lines
+						2.0f // thickness
+					);
+
+					drawList->AddCircle(ImVec2(screenA.x + 350, screenA.y + 36), 4.0f, IM_COL32(255, 255, 0, 255));
+				}
+				else {
+					drawList->AddLine(
+						ImVec2(screenA.x + 350, screenA.y + 36),
+						ImVec2(screenB.x + 350, screenB.y + 36),
+						IM_COL32(255, 0, 0, 255), // red lines
+						2.0f // thickness
+					);
+				}
+
+			}
+		}
+
+	}
+
+	void DrawBoneTree(int boneIdx) {
+		std::string boneName = GetBoneNameFromID(bones[boneIdx].boneID);
+		bool isSelected = bones[boneIdx].selected;
+
+		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
+		if (isSelected)
+			flags |= ImGuiTreeNodeFlags_Selected;
+
+		bool nodeOpen = ImGui::TreeNodeEx((void*)(intptr_t)boneIdx, flags, boneName.c_str());
+
+		if (ImGui::IsItemClicked()) {
+			for (auto& b : bones) b.selected = false;
+			bones[boneIdx].selected = true;
+		}
+
+		if (nodeOpen) {
+			for (int i = 0; i < bones.size(); i++) {
+				if (bones[i].parentIndex == boneIdx) {
+					DrawBoneTree(i);
+				}
+			}
+			ImGui::TreePop();
+		}
+	}
+
+	void RenderBoneGUI() {
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
+		ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
+		ImGui::Text("Bone Names: %s", boneNameSourceFile.c_str());
+		ImGui::Button("Import Custom Bone Names (.json)");
+
+
+		for (int i = 0; i < bones.size(); ++i) {
+			if (bones[i].parentIndex < 0) {
+				DrawBoneTree(i);
+			}
+		}
+		ImGui::EndChild();
+		ImGui::PopStyleColor();
 	}
 
 
 	void RenderGUI() {
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(0.1f, 0.1f, 0.1f, 0.5f));
+		ImGui::BeginChild("MeshSidebar", ImVec2(200, 0));
 		if (isSCR) {
 			ImGui::Text("WMB Meshes - %s", fileName.c_str());
 		}
@@ -1981,6 +2191,8 @@ public:
 
 
 		}
+		ImGui::EndChild();
+		ImGui::PopStyleColor(3);
 	}
 
 };
