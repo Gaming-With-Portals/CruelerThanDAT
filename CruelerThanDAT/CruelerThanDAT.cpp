@@ -315,8 +315,7 @@ void PopulateTextures() {
 						wta.SetEndianess(node->fileIsBigEndian);
 
 						DX9WTAWTPLoad(wta, wtp);
-
-						printf("Loading textures...");
+						return;
 					}
 
 				}
@@ -326,6 +325,39 @@ void PopulateTextures() {
 					wta.SetEndianess(node->fileIsBigEndian);
 
 					DX9WTAWTPLoad(wta, wtp);
+					return;
+				}
+			}
+			for (FileNode* dtnode : node->children) {
+				if (dtnode->fileExtension == "wtp") {
+					FileNode* wtpFile = dtnode;
+					FileNode* wtaFile = nullptr;
+					for (FileNode* pnode : node->children) {
+						if (pnode->fileExtension == "wta") {
+							wtaFile = pnode;
+						}
+					}
+
+					if (wtaFile) {
+						// We have all the data, it's time to lock the fuck in
+						BinaryReader wta = BinaryReader(wtaFile->fileData);
+						BinaryReader wtp = BinaryReader(wtpFile->fileData);
+						wta.SetEndianess(node->fileIsBigEndian);
+
+						DX9WTAWTPLoad(wta, wtp);
+
+						printf("Loading textures...");
+						return;
+					}
+
+				}
+				else if (dtnode->fileExtension == "wtb") {
+					BinaryReader wta = BinaryReader(dtnode->fileData);
+					BinaryReader wtp = BinaryReader(dtnode->fileData);
+					wta.SetEndianess(node->fileIsBigEndian);
+
+					DX9WTAWTPLoad(wta, wtp);
+					return;
 				}
 			}
 

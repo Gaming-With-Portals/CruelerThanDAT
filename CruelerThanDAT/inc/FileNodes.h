@@ -2092,11 +2092,17 @@ public:
 			D3DXMatrixRotationY(&fixRot, D3DXToRadian(90));
 
 			D3DXVECTOR4 fixedBonePos4, fixedParentPos4;
+
 			D3DXVec3Transform(&fixedBonePos4, &bonePos, &fixRot);
 			D3DXVec3Transform(&fixedParentPos4, &parentPos, &fixRot);
 
+
+
 			D3DXVECTOR3 fixedBonePos(fixedBonePos4.x, fixedBonePos4.y, fixedBonePos4.z);
 			D3DXVECTOR3 fixedParentPos(fixedParentPos4.x, fixedParentPos4.y, fixedParentPos4.z);
+
+			fixedBonePos.x *= -1.0f;
+			fixedParentPos.x *= -1.0f;
 
 			// Now project
 			D3DXVECTOR3 screenA, screenB;
@@ -2122,6 +2128,252 @@ public:
 					);
 				}
 
+			}
+		}
+
+	}
+
+
+	struct BoneClothWK {
+		int no = 0;
+		int noUp = 0;
+		int noDown = 0;
+		int noSide = 0;
+		int noPoly = 0;
+		float rotLimit = 1.0f;
+		MGRVector offset = { 0, -0.10000000149011612f ,0 };
+		float m_OriginalRate = 0.0f;
+	};
+
+	struct BonePhysicsContainer {
+		CruelerBone rootBone;
+		int rootBoneIndex = 0;
+		std::unordered_map<int, std::vector<int>> boneChildren;
+		int boneRunLength;
+		int boneRunCounts;
+		int boneStartIndiceOffset;
+		std::vector<int> boneOrder;
+		std::vector<BoneClothWK> boneClothWorks;
+	};
+
+	bool arePhysicsInitalized = false;
+	BonePhysicsContainer bonePhysData;
+
+	bool InitData(int rootBoneID) {
+		bonePhysData.rootBone = CruelerBone();
+		bonePhysData.rootBoneIndex = 0;
+		bool rootFound = false;
+
+		for (int i = 0; i < bones.size(); ++i)
+		{
+			if (bones[i].boneID == rootBoneID) {
+				bonePhysData.rootBone = bones[i];
+				rootFound = true;
+				bonePhysData.rootBoneIndex = i;
+				break;
+			}
+		}
+
+		if (!rootFound) return false;
+
+		bonePhysData.boneChildren.clear();
+
+		for (int i = 0; i < bones.size(); ++i)
+		{
+			int parent = bones[i].parentIndex;
+			if (parent >= 0)
+			{
+				bonePhysData.boneChildren[parent].push_back(i);
+			}
+		}
+
+		bonePhysData.boneRunLength = bonePhysData.boneChildren[bonePhysData.rootBoneIndex][1] - bonePhysData.boneChildren[bonePhysData.rootBoneIndex][0]; // Length of each run
+		bonePhysData.boneRunCounts = bonePhysData.boneChildren[bonePhysData.rootBoneIndex].size(); // Number of individual "skirt" runs
+
+		bonePhysData.boneStartIndiceOffset = bonePhysData.boneChildren[bonePhysData.rootBoneIndex][0];
+
+
+		
+
+		return true;
+
+	}
+
+	void GenerateData() {
+
+		int totalCount = bonePhysData.boneRunCounts * bonePhysData.boneRunLength;
+		int internalOffset = 0;
+		int currentChainIndex = 0;
+		int tiebackSideID = 0; // For open jackets
+		std::reverse(bonePhysData.boneOrder.begin(), bonePhysData.boneOrder.end());
+		for (int boneOrderedIdx : bonePhysData.boneOrder) {
+			BoneClothWK hdrWK = BoneClothWK();
+			int lastBoneDownIndex = 0;
+			hdrWK.no = bones[boneOrderedIdx].boneID;
+			if (bonePhysData.boneChildren[boneOrderedIdx].size() > 0) {
+				hdrWK.noDown = bones[bonePhysData.boneChildren[boneOrderedIdx][0]].boneID;
+				lastBoneDownIndex = bonePhysData.boneChildren[boneOrderedIdx][0];
+			}
+			else {
+				hdrWK.noDown = 4095;
+				lastBoneDownIndex = 4095;
+			}
+			hdrWK.noUp = 4095;
+			int hdrwindedID = 4095;
+			if (currentChainIndex + 1 < bonePhysData.boneOrder.size()) {
+				hdrwindedID = bones[bonePhysData.boneOrder[currentChainIndex + 1]].boneID;
+			}
+			else {
+				hdrwindedID = tiebackSideID;
+			}
+			hdrWK.noSide = hdrwindedID;
+			hdrWK.noPoly = hdrwindedID;
+			
+			for (int x = 0; x < bonePhysData.boneRunLength - 1; x++) {
+				BoneClothWK tmpWK = BoneClothWK();
+				
+
+
+				tmpWK.noUp = bones[lastBoneDownIndex - 1].boneID;
+				tmpWK.no = bones[lastBoneDownIndex].boneID;
+
+				if (bonePhysData.boneChildren[lastBoneDownIndex].size() > 0) {
+					tmpWK.noDown = bones[bonePhysData.boneChildren[lastBoneDownIndex][0]].boneID;
+				}
+				else {
+					tmpWK.noDown = 4095;
+				}
+				int chainOffset = hdrWK.no - tmpWK.no;
+				int windedID = 4095;
+				if (currentChainIndex + 1 < bonePhysData.boneOrder.size()) {
+					windedID = bones[bonePhysData.boneOrder[currentChainIndex + 1] + chainOffset].boneID;
+					tmpWK.noSide = windedID;
+					tmpWK.noPoly = windedID;
+					tiebackSideID = tmpWK.noSide;
+				}
+				else {
+					windedID = tiebackSideID + chainOffset;
+					tmpWK.noSide = windedID;
+					tmpWK.noPoly = windedID;
+					tiebackSideID = tmpWK.noSide;
+				}
+				
+
+
+				lastBoneDownIndex++;
+				bonePhysData.boneClothWorks.push_back(tmpWK);
+			}
+
+
+			bonePhysData.boneClothWorks.push_back(hdrWK);
+			currentChainIndex += 1;
+
+		}
+
+		std::ofstream clothWKDbg;
+		clothWKDbg.open("clothWKDebug.xml");
+		clothWKDbg << "<Root>\n";
+		for (BoneClothWK& wk : bonePhysData.boneClothWorks) {
+			clothWKDbg << "\t<CLOTH_WK>\n";
+			clothWKDbg << "\t\t<no>" << wk.no << "</no>\n";
+			clothWKDbg << "\t\t<noUp>" << wk.noUp << "</noUp>\n";
+			clothWKDbg << "\t\t<noDown>" << wk.noDown << "</noDown>\n";
+			clothWKDbg << "\t\t<noSide>" << wk.noSide << "</noSide>\n";
+			clothWKDbg << "\t\t<noPoly>" << wk.noPoly << "</noPoly>\n";
+			clothWKDbg << "\t\t<noFix>" << 4095 << "</noFix>\n";
+			clothWKDbg << "\t\t<rotLimit>" << wk.rotLimit << "</rotLimit>\n";
+			clothWKDbg << "\t\t<offset>" << wk.offset.x << " " << wk.offset.y << " " << wk.offset.z << "< / offset>\n";
+			clothWKDbg << "\t\t<m_OriginalRate>" << wk.m_OriginalRate << "</m_OriginalRate>\n";
+			clothWKDbg << "\t</CLOTH_WK>\n";
+		}
+		clothWKDbg << "</Root>\n";
+
+
+		clothWKDbg.close();
+
+		std::reverse(bonePhysData.boneOrder.begin(), bonePhysData.boneOrder.end());
+
+		return;
+	}
+
+	void PhysicsPanel() {
+
+		if (arePhysicsInitalized) {
+			for (int i = 0; i < bonePhysData.boneRunCounts; i++) {
+				bones[bonePhysData.boneStartIndiceOffset + bonePhysData.boneRunLength * i].selected = true;
+			}
+
+
+			if (bonePhysData.boneOrder.empty())
+			{
+				for (int i = 0; i < bonePhysData.boneRunCounts; i++) {
+					bonePhysData.boneOrder.push_back(bonePhysData.boneStartIndiceOffset + bonePhysData.boneRunLength * i);
+				}
+			}
+
+			for (int i = 0; i < bonePhysData.boneOrder.size(); ++i)
+			{
+				std::string label = ((std::string(ICON_CI_THREE_BARS) + "bone") + std::to_string(bones[bonePhysData.boneOrder[i]].boneID));
+
+				ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+
+				if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+				{
+					ImGui::SetDragDropPayload("BONE_DRAG", &i, sizeof(int));
+					ImGui::Text("Move %s", label.c_str());
+					ImGui::EndDragDropSource();
+				}
+
+				// Drop target
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("BONE_DRAG"))
+					{
+						int srcIndex = *(const int*)payload->Data;
+						if (srcIndex != i)
+						{
+							std::swap(bonePhysData.boneOrder[i], bonePhysData.boneOrder[srcIndex]);
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+			}
+
+
+
+			if (ImGui::Button("Generate Physics")) {
+				GenerateData();
+			}
+			if (bonePhysData.boneClothWorks.size() > 0) {
+				if (ImGui::CollapsingHeader("Cloth Works (Debug)")) {
+					int i = 0;
+					for (BoneClothWK& clothWK : bonePhysData.boneClothWorks) {
+						i += 1;
+						ImGui::SeparatorText(("Work #" + std::to_string(i)).c_str());
+						ImGui::Text("no: %d", clothWK.no);
+						ImGui::Text("noDown: %d noUp: %d", clothWK.noDown, clothWK.noUp);
+						ImGui::Text("noSide: %d noPoly: %d", clothWK.noSide, clothWK.noPoly);
+
+					}
+				}
+			}
+
+
+
+
+
+			if (ImGui::Button("Clear Data")) {
+				for (int i = 0; i < bonePhysData.boneRunCounts; i++) {
+					ImGui::Text("Run %d: BoneID: %d", i, bones[bonePhysData.boneStartIndiceOffset + bonePhysData.boneRunLength * i].boneID);
+					bones[bonePhysData.boneStartIndiceOffset + bonePhysData.boneRunLength * i].selected = false;
+				}
+				arePhysicsInitalized = false;
+			}
+		}
+		else {
+
+			if (ImGui::Button("Initalize Data")) {
+				arePhysicsInitalized = InitData(4093);;
 			}
 		}
 
@@ -2153,19 +2405,40 @@ public:
 	}
 
 	void RenderBoneGUI() {
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
-		ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
-		ImGui::Text("Bone Names: %s", boneNameSourceFile.c_str());
-		ImGui::Button("Import Custom Bone Names (.json)");
+		if (ImGui::BeginTabBar("bone_sub")) {
+			if (ImGui::BeginTabItem("Armature")) {
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
+				ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
+				ImGui::Text("Bone Names: %s", boneNameSourceFile.c_str());
+				ImGui::Button("Import Custom Bone Names (.json)");
 
 
-		for (int i = 0; i < bones.size(); ++i) {
-			if (bones[i].parentIndex < 0) {
-				DrawBoneTree(i);
+				for (int i = 0; i < bones.size(); ++i) {
+					if (bones[i].parentIndex < 0) {
+						DrawBoneTree(i);
+					}
+				}
+				ImGui::EndChild();
+				ImGui::PopStyleColor();
+				ImGui::EndTabItem();
 			}
+			if (ImGui::BeginTabItem("Physics")) {
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
+				ImGui::BeginChild("PhysicsSidebar", ImVec2(325, 0));
+
+				PhysicsPanel();
+
+				ImGui::EndChild();
+				ImGui::PopStyleColor();
+				ImGui::EndTabItem();
+			}
+
+
+
+			ImGui::EndTabBar();
 		}
-		ImGui::EndChild();
-		ImGui::PopStyleColor();
+
+
 	}
 
 
