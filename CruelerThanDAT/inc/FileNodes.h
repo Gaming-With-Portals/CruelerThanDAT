@@ -5,12 +5,14 @@
 #define FILENODE_H
 #define NOMINMAX
 #include "globals.h"
+#include "tinyxml2.h"
 #include "BinaryHandler.h"
 #include "CodIcons.h"
 #include "Log.h"
 #include "CRC32.h"
 #include "HashDataContainer.h"
 #include "ImGuiExtended.h"
+#include "TextEditor.h"
 #include "WMB.h"
 #include "CTDModel.h"
 #include "UID.h"
@@ -172,13 +174,13 @@ public:
 		ofn.Flags = OFN_PATHMUSTEXIST;
 
 		if (GetOpenFileName(&ofn) == TRUE) {
-			std::ifstream file(ofn.lpstrFile, std::ios::binary | std::ios::ate); // Open in binary mode!
+			std::ifstream file(ofn.lpstrFile, std::ios::binary | std::ios::ate); 
 			if (file.is_open()) {
 				fileData.clear();
-				std::streamsize size = file.tellg(); // Get file size
-				fileData.resize(size);         // Resize vector to file size
-				file.seekg(0, std::ios::beg);       // Go back to beginning
-				file.read(fileData.data(), size); // Read data
+				std::streamsize size = file.tellg(); 
+				fileData.resize(size);         
+				file.seekg(0, std::ios::beg);     
+				file.read(fileData.data(), size);
 				file.close();
 				std::cout << "Replaced file! " << std::endl;
 			}
@@ -989,7 +991,7 @@ public:
 		return xml;
 	}
 
-
+	TextEditor ImEditor;
 	BXMInternal::XMLNode* baseNode;
 	int infoOffset;
 	int dataOffset;
@@ -1008,102 +1010,15 @@ public:
 	}
 
 	void RenderGUI() {
-		if (baseNode->name == "SubPhaseInfoRoot") {
+
+		if (ImGui::Button("Save")) {
+			TinyXMLToGwpBXM();
 			isEdited = true;
-			ImGui::Text("Phase Editor");
-			BXMInternal::XMLNode* infoList = baseNode->childNodes[0];
-			for (BXMInternal::XMLNode* subNode : infoList->childNodes) {
-				if (ImGui::CollapsingHeader(subNode->childAttributes[0]->value.c_str())) {
-					for (const std::string& paramName : BXMInternal::possibleParams) {
-						// Step 2: Search for this parameter in the subNode
-						BXMInternal::XMLNode* foundParam = nullptr;
-						for (BXMInternal::XMLNode* existingParam : subNode->childNodes) {
-							if (existingParam->name == paramName) {
-								foundParam = existingParam;
-								break;
-							}
-						}
-
-						// If not found, create a dummy node (only for editing)
-						if (!foundParam) {
-							foundParam = new BXMInternal::XMLNode();
-							foundParam->name = paramName;
-							foundParam->value = ""; // default empty
-							foundParam->parent = subNode;
-							subNode->childNodes.push_back(foundParam);
-						}
-
-						ImGui::PushID(foundParam);
-
-						std::string& paramValue = foundParam->value;
-						
-						if (paramName == "RoomNo") {
-							std::vector<std::string> rooms = BXMInternal::SplitString(paramValue, ' ');
-
-							// Resize buffer to match rooms
-							roomBuffers.resize(rooms.size());
-							for (size_t i = 0; i < rooms.size(); ++i) {
-								std::strncpy(roomBuffers[i].data(), rooms[i].c_str(), 32);
-								roomBuffers[i][31] = '\0'; // Ensure null-termination
-							}
-
-							std::string newRoomData;
-
-							for (size_t i = 0; i < roomBuffers.size(); ++i) {
-								ImGui::InputText(("Room " + std::to_string(i)).c_str(), roomBuffers[i].data(), 32);
-								ImGui::SameLine();
-								if (ImGui::Button(("-##" + std::to_string(i)).c_str())) {
-									roomBuffers.erase(roomBuffers.begin() + i);
-									--i;
-									continue;
-								}
-								newRoomData += std::string(roomBuffers[i].data()) + " ";
-							}
-
-							paramValue = newRoomData;
-
-							if (ImGui::Button("New Room")) {
-								std::array<char, 32> newRoom{};
-								std::strncpy(newRoom.data(), "r000", 32);
-								roomBuffers.push_back(newRoom);
-							}
-						}
-						else if (paramName == "isRestartPoint") {
-							bool checked = (paramValue == "YES");
-							if (ImGui::Checkbox(paramName.c_str(), &checked)) {
-								paramValue = checked ? "YES" : "NO";
-							}
-						}
-						else if (paramName == "CameraEnable" || paramName == "CameraXEnable" || paramName == "CameraYEnable") {
-							bool checked = (paramValue == "ON");
-							if (ImGui::Checkbox(paramName.c_str(), &checked)) {
-								paramValue = checked ? "ON" : "OFF";
-							}
-						}
-						else if (paramName == "isPlWaitPayment") {
-							bool checked = (paramValue == "YES");
-							if (ImGui::Checkbox(paramName.c_str(), &checked)) {
-								paramValue = checked ? "YES" : "NO";
-							}
-						}
-						else if (paramName == "CameraYaw") {
-							float yaw = paramValue.empty() ? 0.0f : std::stof(paramValue);
-							if (ImGui::InputFloat(paramName.c_str(), &yaw)) {
-								paramValue = std::to_string(yaw);
-							}
-						}
-						else {
-							ImGui::Text("%s: %s", paramName.c_str(), paramValue.c_str());
-						}
-
-						ImGui::PopID();
-					}
-				}
-
-			}
-
 		}
-		
+
+		ImEditor.Render("TextEditor");
+
+	
 
 	}
 
@@ -1173,15 +1088,13 @@ public:
 		infoOffset = 16;
 		dataOffset = 16 + 8 * nodeCount;
 		stringOffset = 16 + 8 * nodeCount + dataCount * 4;
-
+		
 
 		baseNode = ReadXMLNode(reader, nullptr);
 		xmlData = ConvertToXML(baseNode);
-		xmlBuffer.resize(xmlData.size() + 1); // +1 for null termination
-		std::copy(xmlData.begin(), xmlData.end(), xmlBuffer.begin()); // Copy new data into buffer
-		xmlBuffer[xmlBuffer.size() - 1] = '\0';
 
-
+		ImEditor.SetText(xmlData);
+		
 		return;
 	}
 
@@ -1203,10 +1116,56 @@ public:
 		return output;
 	}
 
+	BXMInternal::XMLNode* ConvertXML(tinyxml2::XMLElement* element, BXMInternal::XMLNode* parent = nullptr) {
+		BXMInternal::XMLNode* node = new BXMInternal::XMLNode();
+		node->name = element->Name();
+		node->value = element->GetText() ? element->GetText() : "";
+		node->parent = parent;
+
+		const tinyxml2::XMLAttribute* attr = element->FirstAttribute();
+		while (attr) {
+			auto* attrPtr = new BXMInternal::XMLAttribute();
+			attrPtr->name = attr->Name();
+			attrPtr->value = attr->Value();
+			node->childAttributes.push_back(attrPtr);
+			attr = attr->Next();
+		}
+
+		for (tinyxml2::XMLElement* child = element->FirstChildElement(); child; child = child->NextSiblingElement()) {
+			BXMInternal::XMLNode* childNode = ConvertXML(child, node);
+			node->childNodes.push_back(childNode);
+		}
+
+		return node;
+	}
+
+	int TinyXMLToGwpBXM() {
+		tinyxml2::XMLDocument doc;
+		if (doc.Parse(ImEditor.GetText().c_str()) != tinyxml2::XML_SUCCESS) {
+			CTDLog::Log::getInstance().LogError("Failed to repack BXM! Check your XML file for errors.");
+			return -1;
+		}
+
+		tinyxml2::XMLElement* root = doc.RootElement();
+		if (!root) {
+			CTDLog::Log::getInstance().LogError("Failed to repack BXM! Your XML requires a root node to be valid.");
+			return -1;
+		}
+
+		baseNode = ConvertXML(root);
+
+		return 0;
+	}
+
 	void SaveFile() override {
 		if (!isEdited) {
 			return;
 		}
+
+		if (TinyXMLToGwpBXM() != 0) {
+			CTDLog::Log::getInstance().LogError(fileName + " failed to repack!");
+		}
+
 		BinaryWriter* writer = new BinaryWriter(true);
 		writer->WriteString("BXM");
 		writer->WriteByteZero();
@@ -2101,8 +2060,6 @@ public:
 			D3DXVECTOR3 fixedBonePos(fixedBonePos4.x, fixedBonePos4.y, fixedBonePos4.z);
 			D3DXVECTOR3 fixedParentPos(fixedParentPos4.x, fixedParentPos4.y, fixedParentPos4.z);
 
-			fixedBonePos.x *= -1.0f;
-			fixedParentPos.x *= -1.0f;
 
 			// Now project
 			D3DXVECTOR3 screenA, screenB;
@@ -2410,7 +2367,6 @@ public:
 				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
 				ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
 				ImGui::Text("Bone Names: %s", boneNameSourceFile.c_str());
-				ImGui::Button("Import Custom Bone Names (.json)");
 
 
 				for (int i = 0; i < bones.size(); ++i) {
@@ -2422,6 +2378,23 @@ public:
 				ImGui::PopStyleColor();
 				ImGui::EndTabItem();
 			}
+			if (ImGui::BeginTabItem("Animation")) {
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
+				ImGui::BeginChild("AnimSidebar", ImVec2(325, 0));
+				
+				for (FileNode* fNode : parent->children) {
+					if (fNode->nodeType == MOT) {
+						ImGui::Text(fNode->fileName.c_str());
+					}
+				}
+
+
+
+				ImGui::EndChild();
+				ImGui::PopStyleColor();
+				ImGui::EndTabItem();
+			}
+
 			if (ImGui::BeginTabItem("Physics")) {
 				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
 				ImGui::BeginChild("PhysicsSidebar", ImVec2(325, 0));
@@ -2555,7 +2528,11 @@ public:
 	}
 };
 
-
+struct BnkHircObject {
+	uint8_t type;
+	uint32_t size;
+	uint32_t uid;
+};
 
 
 class BnkFileNode : public FileNode {
@@ -2630,13 +2607,23 @@ public:
 				// Chunk lore
 				int childrenCount = reader.ReadUINT32();
 				for (int i = 0; i < childrenCount; i++) {
-					int flag = reader.ReadINT8();
-					int size = reader.ReadUINT32();
-					size_t nextHircChunkPosition = reader.Tell() + size;
-					reader.Skip(sizeof(int)); // TODO: uid
+					BnkHircObject hirc = BnkHircObject();
+					hirc.type = reader.ReadINT8();
+					hirc.size = reader.ReadUINT32();
+					size_t nextHircChunkPosition = reader.Tell() + hirc.size;
+					hirc.uid = reader.ReadUINT32();
+					
 
-					if (flag == 0x4) {
+
+					if (hirc.type == 0x4) {
+						int eventCounts = reader.ReadUINT32();
+						for (int i = 0; i < eventCounts; i++) {
+							reader.ReadUINT32();
+						}
 						
+					}
+					else {
+						reader.Skip(sizeof(int)); // TODO: uid
 					}
 
 

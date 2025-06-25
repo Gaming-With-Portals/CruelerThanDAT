@@ -742,7 +742,6 @@ void RenderFrame() {
 	if (FileNode::selectedNode) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
 			showViewport = true;
-			ImGui::Text("- Binary XML");
 			BxmFileNode* bxmNode = ((BxmFileNode*)FileNode::selectedNode);
 			bxmNode->RenderGUI();
 		}
@@ -840,7 +839,7 @@ void RenderFrame() {
 					ImGui::SetNextItemWidth(120.0f);
 					ImGui::SliderFloat("FOV", &fov, 20.0f, 100.0f);
 					//ImGui::Checkbox("Spin Model?", &spinModel);
-					ImGui::EndTabItem();
+					ImGui::EndTabItem(); 
 				}
 
 				ImGui::EndTabBar();
