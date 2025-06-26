@@ -17,6 +17,7 @@
 #include "CTDModel.h"
 #include "UID.h"
 #include "UVD.h"
+#include <Wwise/wwise.h>
 
 /**/
 
@@ -2534,6 +2535,11 @@ struct BnkHircObject {
 	uint32_t uid;
 };
 
+struct BnkEventObject : BnkHircObject {
+	std::vector<unsigned int> ids;
+};
+
+static WWISE::Data002BlobData* Data002Blob = nullptr;
 
 class BnkFileNode : public FileNode {
 public:
@@ -2543,7 +2549,16 @@ public:
 		nodeType = BNK;
 		fileFilter = L"WWISE Audio Bank v72(*.bnk)\0*.bnk;\0";
 	}
+
+	std::vector<BnkHircObject> hircObjects;
+
 	void LoadFile() override {
+		if (!Data002Blob) {
+			Data002Blob = new WWISE::Data002BlobData();
+			Data002Blob->Load();
+		}
+
+
 		BinaryReader reader(fileData, fileIsBigEndian);
 		reader.Seek(0x4);
 		int headerLength = reader.ReadUINT32();
@@ -2607,23 +2622,21 @@ public:
 				// Chunk lore
 				int childrenCount = reader.ReadUINT32();
 				for (int i = 0; i < childrenCount; i++) {
-					BnkHircObject hirc = BnkHircObject();
-					hirc.type = reader.ReadINT8();
-					hirc.size = reader.ReadUINT32();
-					size_t nextHircChunkPosition = reader.Tell() + hirc.size;
-					hirc.uid = reader.ReadUINT32();
+					int type = reader.ReadINT8();
+					unsigned int size = reader.ReadUINT32();
+					size_t nextHircChunkPosition = reader.Tell() + size;
+					unsigned int uid = reader.ReadUINT32();
 					
 
 
-					if (hirc.type == 0x4) {
+					if (type == 0x4) {
+						BnkEventObject evnObj{ type, size, uid };
 						int eventCounts = reader.ReadUINT32();
 						for (int i = 0; i < eventCounts; i++) {
-							reader.ReadUINT32();
+							evnObj.ids.push_back(reader.ReadUINT32());
 						}
 						
-					}
-					else {
-						reader.Skip(sizeof(int)); // TODO: uid
+						hircObjects.push_back(evnObj);
 					}
 
 
@@ -2691,6 +2704,49 @@ public:
 
 
 	}
+
+	std::string GetBNKHircID(BnkHircObject obj) {
+		if (Data002Blob->wwiseHircObjectIDs.find(obj.uid) != Data002Blob->wwiseHircObjectIDs.end()) {
+			return Data002Blob->wwiseHircObjectIDs[obj.uid];
+		}
+		else {
+			return std::to_string(obj.uid);
+		}
+	}
+
+	void RenderGUI() {
+		if (ImGui::BeginTabBar("bnk_tab")) {
+			if (ImGui::BeginTabItem("Audio")) {
+
+
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("Events")) {
+				if (ImGui::TreeNode("Events")) {
+					if (ImGui::TreeNode("Default Work Unit")) {
+						for (BnkHircObject hirc : hircObjects) {
+							if (hirc.type == 0x4) {
+								if (ImGui::TreeNodeEx((GetBNKHircID(hirc)).c_str(), ImGuiTreeNodeFlags_Bullet)) {
+									ImGui::TreePop();
+								}
+							}
+						}
+						ImGui::TreePop();
+					}
+					ImGui::TreePop();
+				}
+
+
+
+
+				ImGui::EndTabItem();
+			}
+			ImGui::EndTabBar();
+		}
+
+
+	}
+
 	void SaveFile() override {
 
 	}

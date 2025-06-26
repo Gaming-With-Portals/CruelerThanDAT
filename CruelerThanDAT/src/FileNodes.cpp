@@ -1,5 +1,4 @@
 #include "pch.hpp"
-
 #include "FileNodes.h"
 const FbxSystemUnit fbxsdk::FbxSystemUnit::m(100.0);
 

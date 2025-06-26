@@ -772,6 +772,10 @@ void RenderFrame() {
 			UvdFileNode* uvdNode = ((UvdFileNode*)FileNode::selectedNode);
 			uvdNode->RenderGUI();
 		}
+		else if (FileNode::selectedNode->nodeType == FileNodeTypes::BNK) {
+			BnkFileNode* bnkNode = ((BnkFileNode*)FileNode::selectedNode);
+			bnkNode->RenderGUI();
+		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
 			showViewport = false;
 			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
