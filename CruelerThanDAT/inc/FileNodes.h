@@ -2881,6 +2881,7 @@ public:
 		hashData.StructSize = static_cast<int>(4 + 2 * bucketTable.size() + 4 * hashTuple.size() + 2 * hashTuple.size());
 
 		BinaryWriter* writer = new BinaryWriter();
+		writer->SetEndianess(fileIsBigEndian);
 		writer->WriteString("DAT");
 		writer->WriteByteZero();
 		int fileCount = static_cast<int>(children.size());
