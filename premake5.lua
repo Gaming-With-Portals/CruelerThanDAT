@@ -56,8 +56,8 @@ workspace "CruelerThanDAT"
 				libdirs {
 					path.join(fbx,		"lib/x64/debug/"),
 					path.join(directx,	"Lib/x64/"),
-
-					"build-curl/%{cfg.longname}/lib/",
+					"depends/SDL3/lib",
+					"build-curl/%{cfg.longname}/lib/x64/",
 				}
 				
 				local fbxsdkdll = path.join(fbx, "lib/x64/debug/libfbxsdk.dll")
@@ -70,7 +70,7 @@ workspace "CruelerThanDAT"
 				libdirs {
 					path.join(fbx,		"lib/x64/release/"),
 					path.join(directx,	"Lib/x64/"),
-
+					"depends/SDL3/lib/x64/",
 					"build-curl/%{cfg.longname}/lib/",
 				}
 				
@@ -108,7 +108,7 @@ workspace "CruelerThanDAT"
 				libdirs {
 					path.join(fbx,		"lib/x64/debug/"),
 					path.join(directx,	"Lib/x64/"),
-
+					"depends/SDL3/lib/x64/",
 					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 				}
 				
@@ -122,7 +122,7 @@ workspace "CruelerThanDAT"
 				libdirs {
 					path.join(fbx,		"lib/x64/release/"),
 					path.join(directx,	"Lib/x64/"),
-
+					"depends/SDL3/lib/x64/",
 					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 				}
 				
@@ -163,11 +163,13 @@ workspace "CruelerThanDAT"
 		externalincludedirs {
 			path.join(directx,	"Include/"),
 			path.join(fbx,		"include/"),
-
+			"depends/GLAD/src",
 			"depends/curl/include/curl/",
+			"depends/SDL3/include",
 			"depends/imgui/inc/",
 			"depends/imstb/",
 			"depends/json/",
+			"depends/GLAD/include",
 		}
 
 		filter { "toolset:clang" }
@@ -189,7 +191,7 @@ workspace "CruelerThanDAT"
 				"ws2_32",
 				"comdlg32",
 				"ole32",
-
+				"SDL3",
 				"d3dx9d",
 				"d3d9",
 				"libfbxsdk",
@@ -206,7 +208,7 @@ workspace "CruelerThanDAT"
 				"ws2_32",
 				"comdlg32",
 				"ole32",
-
+				"SDL3",
 				"d3dx9",
 				"d3d9",
 				"libfbxsdk",

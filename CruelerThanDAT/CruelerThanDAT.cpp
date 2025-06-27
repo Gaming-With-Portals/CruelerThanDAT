@@ -2,9 +2,17 @@
 
 #define NOMINMAX
 #define CURL_STATICLIB
+#define SDL_MAIN_USE_CALLBACKS 1  
 
-#include <imgui_impl_dx9.h>
-#include <imgui_impl_win32.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+
+#include <glad/glad.h>
+
+
+#include <imgui_impl_opengl3.h>
+#include <imgui_impl_sdl3.h>
+
 
 #include "CruelerThanDAT.h"
 #include "globals.h"
@@ -21,7 +29,6 @@
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 int TEXTURE_CAP = 512;
 
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
 static LPDIRECT3D9              g_pD3D = nullptr;
 static LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
@@ -29,6 +36,8 @@ static bool                     g_DeviceLost = false;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
 static D3DPRESENT_PARAMETERS    g_d3dpp = {};
 static bool hasReset = false;
+
+static SDL_Window* window = nullptr;
 
 HWND hwnd;
 
@@ -420,8 +429,6 @@ bool isDragging = false;
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
-		return true;
 
 	switch (msg)
 	{
@@ -516,65 +523,25 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return ::DefWindowProcW(hWnd, msg, wParam, lParam);
 }
 
-bool CreateDeviceD3D(HWND hWnd)
+
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 {
-	if ((g_pD3D = Direct3DCreate9(D3D_SDK_VERSION)) == nullptr)
-		return false;
-
-	// Create the D3DDevice
-	ZeroMemory(&g_d3dpp, sizeof(g_d3dpp));
-	g_d3dpp.Windowed = TRUE;
-	g_d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	g_d3dpp.BackBufferFormat = D3DFMT_UNKNOWN; // Need to use an explicit format with alpha if needing per-pixel alpha composition.
-	g_d3dpp.EnableAutoDepthStencil = TRUE;
-	g_d3dpp.AutoDepthStencilFormat = D3DFMT_D16;
-	g_d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_ONE;           // Present with vsync
-	g_d3dpp.BackBufferWidth = 1600;
-	g_d3dpp.BackBufferHeight = 900;
-	//g_d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;   // Present without vsync, maximum unthrottled framerate
-	if (g_pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &g_d3dpp, &g_pd3dDevice) < 0)
-		return false;
-
-	LPD3DXBUFFER pVertexShaderBuffer = nullptr;
-	LPD3DXBUFFER pPixelShaderBuffer = nullptr;
-
-	D3DXCompileShader(solidColorVTX, static_cast<UINT>(strlen(solidColorVTX)),
-		NULL, NULL, "main", "vs_3_0", 0,
-		&pVertexShaderBuffer, NULL, NULL);
-
-	D3DXCompileShader(solidColorPX, static_cast<UINT>(strlen(solidColorPX)),
-		NULL, NULL, "main", "ps_3_0", 0,
-		&pPixelShaderBuffer, NULL, NULL);
-
-	g_pd3dDevice->CreateVertexShader((DWORD*)pVertexShaderBuffer->GetBufferPointer(), &pSolidShaderVTX);
-	g_pd3dDevice->CreatePixelShader((DWORD*)pPixelShaderBuffer->GetBufferPointer(), &pSolidShaderPX);
-
-	g_pd3dDevice->SetVertexShader(pSolidShaderVTX);
-	g_pd3dDevice->SetPixelShader(pSolidShaderPX);
-
-	return true;
+	if (event->type == SDL_EVENT_QUIT) {
+		return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
+	}
+	return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
-void CleanupDeviceD3D()
-{
-	if (g_pd3dDevice) { g_pd3dDevice->Release(); g_pd3dDevice = nullptr; }
-	if (g_pD3D) { g_pD3D->Release(); g_pD3D = nullptr; }
-}
-
-void ResetDevice()
+SDL_AppResult SDL_AppIterate(void* appstate)
 {
 
-	ImGui_ImplDX9_InvalidateDeviceObjects();
-	HRESULT hr = g_pd3dDevice->Reset(&g_d3dpp);
-	if (hr == D3DERR_INVALIDCALL)
-		IM_ASSERT(0);
-	ImGui_ImplDX9_CreateDeviceObjects();
+	return SDL_APP_CONTINUE;
 }
 
+void SDL_AppQuit(void* appstate, SDL_AppResult result)
+{
 
-
-
-
+}
 
 void RenderFrame() {
 
@@ -586,19 +553,19 @@ void RenderFrame() {
 	static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
 	(void)cameraVec;
 	static bool spinModel = false;
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
+	/*g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
 	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
 	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);*/
 
 	// Start the ImGui frame
-	ImGui_ImplDX9_NewFrame();
-	ImGui_ImplWin32_NewFrame();
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth), 26));
+	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X), 26));
 
 	ImGui::Begin("TabCtrl", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
 
@@ -630,7 +597,7 @@ void RenderFrame() {
 	ImGui::SetCursorPosY(-1);
 	ImGui::SetCursorPosX(0);
 
-	ImGui::ProgressBar(globalProgress, ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth), 4.0f), "");
+	ImGui::ProgressBar(globalProgress, ImVec2(static_cast<float>(RES_X), 4.0f), "");
 
 	float spacing = 4.0f;
 	float btnW = 36.0f;
@@ -648,9 +615,9 @@ void RenderFrame() {
 	}
 
 	ImGui::End();
-
+	
 	ImGui::SetNextWindowPos(ImVec2(0, 36));
-	ImGui::SetNextWindowSize(ImVec2(350, static_cast<float>(g_d3dpp.BackBufferHeight) - 36));
+	ImGui::SetNextWindowSize(ImVec2(350, static_cast<float>(RES_Y) - 36));
 
 	ImGui::Begin("DatView", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
 
@@ -713,12 +680,12 @@ void RenderFrame() {
 	ImGui::SetNextWindowPos(ImVec2(350, 36));
 	int window_height = 0;
 	if (cruelerLog) {
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, static_cast<float>(g_d3dpp.BackBufferHeight) - 335));
-		window_height = g_d3dpp.BackBufferHeight - 335;
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X) - 350, static_cast<float>(RES_Y) - 335));
+		window_height = RES_Y - 335;
 	}
 	else {
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, static_cast<float>(g_d3dpp.BackBufferHeight) - 75));
-		window_height = g_d3dpp.BackBufferHeight - 80;
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X) - 350, static_cast<float>(RES_Y) - 75));
+		window_height = RES_Y - 80;
 	}
 
 	if (showViewport == false) {
@@ -731,13 +698,13 @@ void RenderFrame() {
 	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
 	if (g_RenderTargetSurface == nullptr || g_RenderTargetTexture == nullptr) {
-		CreateViewportRT(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
+		//CreateViewportRT(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
 	}
 	LPDIRECT3DSURFACE9 g_OriginalBackBuffer = nullptr;
-	g_pd3dDevice->GetRenderTarget(0, &g_OriginalBackBuffer);
-	g_pd3dDevice->SetRenderTarget(0, g_RenderTargetSurface);
-	g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
-		D3DCOLOR_XRGB(50, 50, 50), 1.0f, 0);
+	//g_pd3dDevice->GetRenderTarget(0, &g_OriginalBackBuffer);
+	//g_pd3dDevice->SetRenderTarget(0, g_RenderTargetSurface);
+	//g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
+	//	D3DCOLOR_XRGB(50, 50, 50), 1.0f, 0);
 
 	if (FileNode::selectedNode) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
@@ -749,7 +716,7 @@ void RenderFrame() {
 			showViewport = true;
 			ImGui::Text("- Textures");
 			WtbFileNode* wtbNode = ((WtbFileNode*)FileNode::selectedNode);
-			if (ImGui::BeginListBox("##texturebox", ImVec2{ (float)g_d3dpp.BackBufferWidth - 350.0f, (float)window_height })) {
+			if (ImGui::BeginListBox("##texturebox", ImVec2{ (float)RES_X - 350.0f, (float)window_height })) {
 				for (int x = 0; x < wtbNode->textureCount; x++) {
 
 					ImGui::Text("ID: %i", wtbNode->textureIdx[x]);
@@ -857,8 +824,8 @@ void RenderFrame() {
 
 	ImVec2 pos = ImVec2(350, 36);
 	ImVec2 size = ImGui::GetWindowSize();
-	ImGui::GetBackgroundDrawList()->AddImage(
-		(void*)g_RenderTargetTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y));
+	//ImGui::GetBackgroundDrawList()->AddImage(
+	//	(void*)g_RenderTargetTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y));
 
 
 	ImGui::End();
@@ -871,8 +838,8 @@ void RenderFrame() {
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 
-		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(g_d3dpp.BackBufferHeight) - 300));
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, 300));
+		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(RES_Y) - 300));
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X) - 350, 300));
 		ImGui::Begin("CruelerThanDAT Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
 		if (ImGui::Button(ICON_CI_TERMINAL, ImVec2(25, 25))) {
@@ -902,8 +869,8 @@ void RenderFrame() {
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
-		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(g_d3dpp.BackBufferHeight) - 40));
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, 40));
+		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(RES_Y) - 40));
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X) - 350, 40));
 		ImGui::Begin("CruelerThanDAT Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
 		if (ImGui::Button(ICON_CI_TERMINAL, ImVec2(25, 25))) {
 			cruelerLog = true;
@@ -933,7 +900,7 @@ void RenderFrame() {
 	D3DXMatrixRotationY(&matRotateY, D3DXToRadian(index));
 
 	// tell Direct3D about our matrix
-	g_pd3dDevice->SetTransform(D3DTS_WORLD, &matRotateY);
+	//g_pd3dDevice->SetTransform(D3DTS_WORLD, &matRotateY);
 
 	D3DXMATRIX matView;    // the view transform matrix
 
@@ -946,7 +913,7 @@ void RenderFrame() {
 
 	D3DXVECTOR3 up(0.0f, 1.0f, 0.0f);
 	D3DXMatrixLookAtLH(&view, &cameraPos, &target, &up);
-	g_pd3dDevice->SetTransform(D3DTS_VIEW, &view);
+	//g_pd3dDevice->SetTransform(D3DTS_VIEW, &view);
 
 	D3DXMATRIX matProjection;     // the projection transform matrix
 
@@ -956,84 +923,61 @@ void RenderFrame() {
 		1.0f,    // the near view-plane
 		5000.0f);    // the far view-plane
 
-	g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &matProjection);
+	//g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &matProjection);
 
 
 
 
 
-	g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-	D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
-	g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
-	g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
+	//g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+	//D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
+	//g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
+	//g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
 
-	g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
-		D3DCOLORWRITEENABLE_RED |
-		D3DCOLORWRITEENABLE_GREEN |
-		D3DCOLORWRITEENABLE_BLUE);
-	if (g_pd3dDevice->BeginScene() >= 0)
-	{
-		const float pointSize = 5.0f;
-		g_pd3dDevice->SetRenderState(D3DRS_POINTSIZE, *reinterpret_cast<const DWORD*>(&pointSize));
-		g_pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);  // unless you're using normals and lights
-		g_pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE); // disable backface culling for now
-		g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, TRUE);
+	//g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
+	//	D3DCOLORWRITEENABLE_RED |
+	//	D3DCOLORWRITEENABLE_GREEN |
+	//	D3DCOLORWRITEENABLE_BLUE);
 
-		if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
-			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
-			g_pd3dDevice->SetTexture(0, textureMap[0]);
+	const float pointSize = 5.0f;
 
-			if (showAllSCRMeshes && wmbNode->isSCR) {
-				ScrFileNode* scrNode = (ScrFileNode*)wmbNode->scrNode;
-				for (FileNode* child : scrNode->children) {
-					WmbFileNode* scrChildNode = (WmbFileNode*)child;
-					scrChildNode->RenderMesh();
-				}
+	if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
+		WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
+		//g_pd3dDevice->SetTexture(0, textureMap[0]);
 
+		if (showAllSCRMeshes && wmbNode->isSCR) {
+			ScrFileNode* scrNode = (ScrFileNode*)wmbNode->scrNode;
+			for (FileNode* child : scrNode->children) {
+				WmbFileNode* scrChildNode = (WmbFileNode*)child;
+				scrChildNode->RenderMesh();
 			}
-			else {
-				wmbNode->RenderMesh();
-			}
-
-
 
 		}
-
-		g_pd3dDevice->EndScene();
-
-		g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
-			D3DCOLORWRITEENABLE_RED |
-			D3DCOLORWRITEENABLE_GREEN |
-			D3DCOLORWRITEENABLE_BLUE |
-			D3DCOLORWRITEENABLE_ALPHA);
-
-		g_pd3dDevice->SetRenderTarget(0, g_OriginalBackBuffer);
-		g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
-			D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
-		ImGui::EndFrame();
-		g_pd3dDevice->BeginScene();
+		else {
+			wmbNode->RenderMesh();
+		}
 
 
-		g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
-		g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 
-
-		ImGui::Render();
-		ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
-
-
-		g_pd3dDevice->EndScene();
 	}
-	HRESULT result = g_pd3dDevice->Present(nullptr, nullptr, nullptr, nullptr);
-	if (result == D3DERR_DEVICELOST)
-		g_DeviceLost = true;
+
+	ImGui::EndFrame();
+
+	ImGui::Render();
+
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	glViewport(0, 0, (int)RES_X, (int)RES_Y);
+	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	SDL_GL_SwapWindow(window);
+
+
+
 }
 
 
-
-
-
-int main(int argc, char* argv[])
+SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 {
 	printf("-- CruelerThanDAT --\n");
 
@@ -1078,35 +1022,24 @@ int main(int argc, char* argv[])
 
 	printf("D3DInit...");
 	CTDLog::Log::getInstance().LogNote("Launching CruelerThanDAT...");
-	CTDLog::Log::getInstance().LogNote("Waiting for DirectX9...");
+	CTDLog::Log::getInstance().LogNote("Waiting for OpenGL...");
 
-	WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
-	::RegisterClassExW(&wc);
-	hwnd = ::CreateWindowW(wc.lpszClassName, L"CruelerThanDAT", WS_OVERLAPPEDWINDOW, 100, 100, 1600, 900, nullptr, nullptr, wc.hInstance, nullptr);
+	SDL_Init(SDL_INIT_VIDEO);
 
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-	// Initialize Direct3D
-	if (!CreateDeviceD3D(hwnd))
-	{
-		CleanupDeviceD3D();
-		::UnregisterClassW(wc.lpszClassName, wc.hInstance);
-		return 1;
+	window = SDL_CreateWindow("CruelerThanDAT",
+		RES_X, RES_Y, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS);
+
+	SDL_GLContext context = SDL_GL_CreateContext(window);
+	SDL_GL_MakeCurrent(window, context);
+	SDL_GL_SetSwapInterval(1);
+
+	if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
+		return SDL_APP_FAILURE;
 	}
-
-	LONG style = GetWindowLong(hwnd, GWL_STYLE);
-	style &= ~(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
-	SetWindowLong(hwnd, GWL_STYLE, style);
-
-	// Optional: Remove extended styles like WS_EX_DLGMODALFRAME
-	LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-	exStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
-	SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-
-	// Force update
-	SetWindowPos(hwnd, nullptr, 0, 0, 1600, 900, SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
-
-	::ShowWindow(hwnd, SW_SHOWDEFAULT);
-	::UpdateWindow(hwnd);
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -1118,11 +1051,12 @@ int main(int argc, char* argv[])
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
 
-	ImGui_ImplWin32_Init(hwnd);
-	ImGui_ImplDX9_Init(g_pd3dDevice);
+	ImGui_ImplSDL3_InitForOpenGL(window, context);
+	ImGui_ImplOpenGL3_Init("#version 330 core");
 
 	// Load Fonts
 	io.Fonts->AddFontDefault();
+	
 
 	ImFontConfig config;
 	config.MergeMode = true;
@@ -1130,7 +1064,7 @@ int main(int argc, char* argv[])
 	config.GlyphOffset = ImVec2(0, 5);
 	static const ImWchar icon_ranges[] = { ICON_MIN_CI, ICON_MAX_CI, 0 };
 	io.Fonts->AddFontFromFileTTF("Assets/codicon.ttf", 18, &config, icon_ranges);
-
+	io.Fonts->Build();
 	std::ifstream infile("Assets/codicon.ttf");
 	if (!infile.good()) {
 		CTDLog::Log::getInstance().LogError("Unable to locate Assets/codicons.ttf, icons will be broken!");
@@ -1145,17 +1079,8 @@ int main(int argc, char* argv[])
 
 
 	themeManager->ChooseStyle(1);
+	ImGui::GetStyle().WindowMinSize = ImVec2(32, 32);
 
-	LPDIRECT3DTEXTURE9 pTexture;
-	HRESULT hr = D3DXCreateTextureFromFile(g_pd3dDevice, L"Assets/img.dds", &pTexture);
-	D3DXCreateTextureFromFile(g_pd3dDevice, L"Assets/CruelerThanDAT.png", &applicationIcon);
-	if (FAILED(hr)) {
-		MessageBox(0, L"Failed to load texture!", L"Error", MB_OK);
-
-	}
-
-	printf("Loading basic texture...");
-	textureMap[0] = pTexture;
 
 	if (appConfig.ShowAllMeshesByDefault) {
 		showAllSCRMeshes = true;
@@ -1171,38 +1096,27 @@ int main(int argc, char* argv[])
 	bool done = false;
 	while (!done)
 	{
-		MSG msg;
-		while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
-		{
-			::TranslateMessage(&msg);
-			::DispatchMessage(&msg);
-			if (msg.message == WM_QUIT)
+		SDL_Event event;
+		while (SDL_PollEvent(&event)) {
+			ImGui_ImplSDL3_ProcessEvent(&event);
+			if (event.type == SDL_EVENT_QUIT)
 				done = true;
+			switch (event.type) {
+				case SDL_EVENT_DROP_FILE:
+				{
+					std::string droppedPath = event.drop.data;
+					openFiles.push_back(FileNodeFromFilepath(droppedPath));
+					if (appConfig.AutomaticallyLoadTextures) {
+						PopulateTextures();
+					}
+					//SDL_free((void*)event.drop.data); // don't forget this!
+					break;
+				}
+			}
+
 		}
 		if (done)
 			break;
-
-		if (g_DeviceLost)
-		{
-			HRESULT hr0 = g_pd3dDevice->TestCooperativeLevel();
-			if (hr0 == D3DERR_DEVICELOST)
-			{
-				::Sleep(10);
-				continue;
-			}
-			if (hr0 == D3DERR_DEVICENOTRESET)
-				ResetDevice();
-			g_DeviceLost = false;
-		}
-
-		if (g_ResizeWidth != 0 && g_ResizeHeight != 0 && !hasReset)
-		{
-			g_d3dpp.BackBufferWidth = g_ResizeWidth;
-			g_d3dpp.BackBufferHeight = g_ResizeHeight;
-			g_ResizeWidth = g_ResizeHeight = 0;
-			hasReset = true;
-			ResetDevice();
-		}
 
 		RenderFrame();
 
@@ -1217,6 +1131,6 @@ int main(int argc, char* argv[])
 		}
 
 	}
-
+	return SDL_APP_CONTINUE;
 }
 

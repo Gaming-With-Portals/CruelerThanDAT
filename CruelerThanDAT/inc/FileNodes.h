@@ -18,6 +18,7 @@
 #include "UID.h"
 #include "UVD.h"
 #include <Wwise/wwise.h>
+#include <glad/glad.h>
 
 /**/
 
@@ -842,7 +843,8 @@ public:
 							UINT texHeight = desc.Height;
 							ImVec2 uv0(uvdEntry.x / (float)texWidth, uvdEntry.y / (float)texHeight);
 							ImVec2 uv1((uvdEntry.x + uvdEntry.width) / (float)texWidth, (uvdEntry.y + uvdEntry.height) / (float)texHeight);
-							ImGui::Image((ImTextureID)(intptr_t)textureMap[entry.data1.dataStructure.img.textureID], ImVec2(17, 17), uv0, uv1, ImVec4(entry.rgb.r, entry.rgb.g, entry.rgb.b, entry.rgb.a));
+						
+							ImGui::Image((ImTextureID)(intptr_t)textureMap[entry.data1.dataStructure.img.textureID], ImVec2(17, 17), uv0, uv1); // ImVec4(entry.rgb.r, entry.rgb.g, entry.rgb.b, entry.rgb.a), Fuck you, ImGui, I liked that feature 
 							ImGui::SameLine();
 							foundUVD = true;
 							break;
@@ -1384,8 +1386,11 @@ class CruelerBatch {
 	// i hate everything
 	// I can count how many seconds until I kill myself on one hand
 public:
-	LPDIRECT3DVERTEXBUFFER9 vertexBuffer;
-	LPDIRECT3DINDEXBUFFER9 indexBuffer;
+	//LPDIRECT3DVERTEXBUFFER9 vertexBuffer;
+	//LPDIRECT3DINDEXBUFFER9 indexBuffer;
+	unsigned int vertexBuffer;
+	unsigned int indexBuffer;
+	unsigned int vao;
 	std::vector<CUSTOMVERTEX> vertexes;
 	std::vector<unsigned short> indexes;
 	int indexCount;
@@ -1652,15 +1657,9 @@ public:
 				}
 				ctdbatch->indexCount = static_cast<int>(indices.size());
 				ctdbatch->indexes = indices;
-
-				g_pd3dDevice->CreateIndexBuffer(static_cast<UINT>(indices.size()) * sizeof(short), 0,
-					D3DFMT_INDEX16, D3DPOOL_MANAGED,
-					&ctdbatch->indexBuffer, nullptr);
-				void* pIndexData = nullptr;
-				ctdbatch->indexBuffer->Lock(0, 0, &pIndexData, 0);
-
-				std::memcpy(pIndexData, indices.data(), indices.size() * sizeof(short));
-				ctdbatch->indexBuffer->Unlock();
+				glGenBuffers(1, &ctdbatch->indexBuffer);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned short), indices.data(), GL_STATIC_DRAW);
 
 
 
@@ -1676,7 +1675,6 @@ public:
 						vertexes.push_back(vtx);
 					}
 
-
 					std::vector<CUSTOMVERTEX> convertedVtx;
 					for (WMBVertexA& vertex : vertexes) {
 						CUSTOMVERTEX cvtx;
@@ -1685,24 +1683,17 @@ public:
 						cvtx.z = vertex.position.z;
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
-						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+						cvtx.color = 0xFFFFFFFF; // white, RGBA as uint32
 						convertedVtx.push_back(cvtx);
 					}
 
-					g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(CUSTOMVERTEX),
-						0, 0,
-						D3DPOOL_DEFAULT, &ctdbatch->vertexBuffer, NULL);
+					if (ctdbatch->vertexBuffer == 0)
+						glGenBuffers(1, &ctdbatch->vertexBuffer);
 
-					void* pVertexData = nullptr;
-					const HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
-					if (S_OK != hr) {
-						// TODO: Handle this
-					}
-					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
-					ctdbatch->vertexBuffer->Unlock();
+					glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+					glBufferData(GL_ARRAY_BUFFER, convertedVtx.size() * sizeof(CUSTOMVERTEX), convertedVtx.data(), GL_STATIC_DRAW);
+
 					ctdbatch->vertexes = convertedVtx;
-					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
-
 				}
 				else if (header.vertexFormat == 65847 || header.vertexFormat == 66359 || header.vertexFormat == 311) {
 
@@ -1730,19 +1721,13 @@ public:
 						convertedVtx.push_back(cvtx);
 					}
 
-					g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(CUSTOMVERTEX),
-						0, 0,
-						D3DPOOL_DEFAULT, &ctdbatch->vertexBuffer, NULL);
+					if (ctdbatch->vertexBuffer == 0)
+						glGenBuffers(1, &ctdbatch->vertexBuffer);
 
-					void* pVertexData = nullptr;
-					const HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
-					if (S_OK != hr) {
-						// TODO: Handle this
-					}
-					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
-					ctdbatch->vertexBuffer->Unlock();
+					glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+					glBufferData(GL_ARRAY_BUFFER, convertedVtx.size() * sizeof(CUSTOMVERTEX), convertedVtx.data(), GL_STATIC_DRAW);
+
 					ctdbatch->vertexes = convertedVtx;
-					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 				}
 				else if (header.vertexFormat == 66311) {
 
@@ -1774,19 +1759,13 @@ public:
 						convertedVtx.push_back(cvtx);
 					}
 
-					g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(CUSTOMVERTEX),
-						0, 0,
-						D3DPOOL_DEFAULT, &ctdbatch->vertexBuffer, NULL);
+					if (ctdbatch->vertexBuffer == 0)
+						glGenBuffers(1, &ctdbatch->vertexBuffer);
 
-					void* pVertexData = nullptr;
-					const HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
-					if (S_OK != hr) {
-						// TODO: Handle this
-					}
-					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
-					ctdbatch->vertexBuffer->Unlock();
+					glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+					glBufferData(GL_ARRAY_BUFFER, convertedVtx.size() * sizeof(CUSTOMVERTEX), convertedVtx.data(), GL_STATIC_DRAW);
+
 					ctdbatch->vertexes = convertedVtx;
-					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 
 
 				}
@@ -1820,22 +1799,36 @@ public:
 						convertedVtx.push_back(cvtx);
 					}
 
-					g_pd3dDevice->CreateVertexBuffer(activeBatch.numVertices * sizeof(CUSTOMVERTEX),
-						0, 0,
-						D3DPOOL_DEFAULT, &ctdbatch->vertexBuffer, NULL);
+					if (ctdbatch->vertexBuffer == 0)
+						glGenBuffers(1, &ctdbatch->vertexBuffer);
 
-					void* pVertexData = nullptr;
-					const HRESULT hr = ctdbatch->vertexBuffer->Lock(0, 0, &pVertexData, 0);
-					if (S_OK != hr) {
-						// TODO: Handle this
-					}
-					std::memcpy(pVertexData, convertedVtx.data(), activeBatch.numVertices * sizeof(CUSTOMVERTEX));
-					ctdbatch->vertexBuffer->Unlock();
+					glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+					glBufferData(GL_ARRAY_BUFFER, convertedVtx.size() * sizeof(CUSTOMVERTEX), convertedVtx.data(), GL_STATIC_DRAW);
+
 					ctdbatch->vertexes = convertedVtx;
-					g_pd3dDevice->SetFVF(D3DFVF_CUSTOMVERTEX);
 
 
 				}
+				glGenVertexArrays(1, &ctdbatch->vao);
+
+				glBindVertexArray(ctdbatch->vao);
+
+				// Rebind VBO/IBO inside VAO scope
+				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
+
+				// Set up vertex attributes
+				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)0);
+				glEnableVertexAttribArray(0);
+
+				glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CUSTOMVERTEX), (void*)(3 * sizeof(float)));
+				glEnableVertexAttribArray(1);
+
+				glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(3 * sizeof(float) + sizeof(DWORD)));
+				glEnableVertexAttribArray(2);
+
+				glBindVertexArray(0);
+
 				ctdmesh->batches.push_back(ctdbatch);
 
 			}
@@ -1986,7 +1979,7 @@ public:
 		for (CruelerMesh* mesh : displayMeshes) {
 			if (mesh->visibility) {
 				for (CruelerBatch* batch : mesh->batches) {
-					if (isSCR) {
+					/*if (isSCR) {
 						if (textureMap.find(mesh->materials[batch->materialID]->texture_data[0]) != textureMap.end()) {
 							g_pd3dDevice->SetTexture(0, textureMap[mesh->materials[batch->materialID]->texture_data[0]]);
 						}
@@ -2011,13 +2004,14 @@ public:
 						D3DXMatrixTranslation(&matTrans, meshOffset.x, meshOffset.y, meshOffset.z);
 						matWorld = matScale * matRot * matTrans;
 						g_pd3dDevice->SetTransform(D3DTS_WORLD, &matWorld);
-					}
+					}*/
 
+					glBindVertexArray(batch->vao); 
 
-					g_pd3dDevice->SetIndices(batch->indexBuffer);
-					g_pd3dDevice->SetStreamSource(0, batch->vertexBuffer, 0, mesh->structSize);
+					glBindBuffer(GL_ARRAY_BUFFER, batch->vertexBuffer);
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch->indexBuffer);
 
-					g_pd3dDevice->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, batch->vertexCount, 0, batch->indexCount / 3);
+					glDrawElements(GL_TRIANGLES, batch->indexCount, GL_UNSIGNED_SHORT, 0);
 				}
 
 			}
@@ -2026,7 +2020,7 @@ public:
 
 		}
 
-		ImDrawList* drawList = ImGui::GetForegroundDrawList();
+		/*ImDrawList* drawList = ImGui::GetForegroundDrawList();
 		D3DXMATRIX view, proj;
 		g_pd3dDevice->GetTransform(D3DTS_VIEW, &view);
 		g_pd3dDevice->GetTransform(D3DTS_PROJECTION, &proj);
@@ -2087,7 +2081,7 @@ public:
 				}
 
 			}
-		}
+		}*/
 
 	}
 
