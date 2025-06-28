@@ -56,15 +56,16 @@ workspace "CruelerThanDAT"
 				libdirs {
 					path.join(fbx,		"lib/x64/debug/"),
 					path.join(directx,	"Lib/x64/"),
-					"depends/SDL3/lib",
-					"build-curl/%{cfg.longname}/lib/x64/",
+					"depends/SDL3/lib/x64/",
+					"build-curl/%{cfg.longname}/lib/",
 				}
 				
 				local fbxsdkdll = path.join(fbx, "lib/x64/debug/libfbxsdk.dll")
 				postbuildcommands {
 					('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
 					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
-					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+					'{COPYFILE} "%{prj.location}/depends/SDL3/lib/x64/SDL3.dll" "%{cfg.buildtarget.directory}/SDL3.dll"',
+					'{COPYFILE} "%{prj.location}/depends/SDL3/LICENSE.txt" "%{cfg.buildtarget.directory}/SDL3_LICENSE"',
 				}
 			filter { "configurations:Release" }
 				libdirs {
@@ -79,6 +80,8 @@ workspace "CruelerThanDAT"
 					('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
 					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
 					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+					'{COPYFILE} "%{prj.location}/depends/SDL3/lib/x64/SDL3.dll" "%{cfg.buildtarget.directory}/SDL3.dll"',
+					'{COPYFILE} "%{prj.location}/depends/SDL3/LICENSE.txt" "%{cfg.buildtarget.directory}/SDL3_LICENSE"',
 				}
 			filter {}
 
@@ -117,6 +120,8 @@ workspace "CruelerThanDAT"
 					('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
 					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
 					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+					'{COPYFILE} "%{prj.location}/depends/SDL3/lib/x64/SDL3.dll" "%{cfg.buildtarget.directory}/SDL3.dll"',
+					'{COPYFILE} "%{prj.location}/depends/SDL3/LICENSE.txt" "%{cfg.buildtarget.directory}/SDL3_LICENSE"',
 				}
 			filter { "configurations:Release" }
 				libdirs {
@@ -131,6 +136,8 @@ workspace "CruelerThanDAT"
 					('{COPYFILE} "' .. fbxsdkdll .. '" "%{cfg.buildtarget.directory}/libfbxsdk.dll"'),
 					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
 					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
+					'{COPYFILE} "%{prj.location}/depends/SDL3/lib/x64/SDL3.dll" "%{cfg.buildtarget.directory}/SDL3.dll"',
+					'{COPYFILE} "%{prj.location}/depends/SDL3/LICENSE.txt" "%{cfg.buildtarget.directory}/SDL3_LICENSE"',
 				}
 			filter {}
 
