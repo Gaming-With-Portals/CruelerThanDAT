@@ -1871,23 +1871,36 @@ public:
 				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
 
-				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)0);
+				size_t curOffset = 0;
+				// Position
+				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
 				glEnableVertexAttribArray(0);
+				curOffset += 3 * sizeof(float);
 
-				glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CUSTOMVERTEX), (void*)(3 * sizeof(float)));
+				// Color
+				glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CUSTOMVERTEX), (void*)curOffset);
 				glEnableVertexAttribArray(1);
+				curOffset += 4 * sizeof(byte);
 
-				glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(3 * sizeof(float) + sizeof(DWORD)));
+				// UV map
+				glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
 				glEnableVertexAttribArray(2);
+				curOffset += 2 * sizeof(float);
 
-				glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(2 * sizeof(float) + 3 * sizeof(float) + sizeof(DWORD))); // Normals
+				// Normals
+				glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
 				glEnableVertexAttribArray(3);
+				curOffset += 3 * sizeof(float);
 
-				glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(2 * sizeof(float) + 3 * sizeof(float) + 3 * sizeof(float) + sizeof(DWORD))); // Normals
+				// Tangents
+				glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
 				glEnableVertexAttribArray(4);
+				curOffset += 4 * sizeof(float);
 
-				glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(2 * sizeof(float) + 3 * sizeof(float) + 3 * sizeof(float) + 3 * sizeof(float) + sizeof(DWORD))); // Lightmap UV
+				// Lightmap UV
+				glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
 				glEnableVertexAttribArray(2);
+				curOffset += 2 * sizeof(float);
 
 				glBindVertexArray(0);
 
