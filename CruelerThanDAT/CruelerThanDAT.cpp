@@ -77,6 +77,9 @@ static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 ThemeManager* themeManager;
 CPKManager* cpkManager;
 
+bool dragging = false;
+int drag_offset_x = 0;
+int drag_offset_y = 0;
 
 bool showAllSCRMeshes = false;
 bool cruelerLog = true;
@@ -548,7 +551,7 @@ void RenderFrame() {
 	ImGui::SameLine();
 
 	if (ImGui::Button("X", ImVec2(btnW, 0))) {
-		PostQuitMessage(0);
+		exit(0);
 	}
 
 	ImGui::End();
@@ -1057,9 +1060,40 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 					if (appConfig.AutomaticallyLoadTextures) {
 						PopulateTextures();
 					}
-					//SDL_free((void*)event.drop.data); // don't forget this!
 					break;
 				}
+				case SDL_EVENT_MOUSE_BUTTON_DOWN:
+					if (event.button.button == SDL_BUTTON_LEFT) {
+						int x = event.button.x;
+						int y = event.button.y;
+
+						if (y >= 0 && y <= 30) {
+							dragging = true;
+
+							int win_x, win_y;
+							SDL_GetWindowPosition(window, &win_x, &win_y);
+							drag_offset_x = x;
+							drag_offset_y = y;
+						}
+					}
+					break;
+
+				case SDL_EVENT_MOUSE_BUTTON_UP:
+					if (event.button.button == SDL_BUTTON_LEFT) {
+						dragging = false;
+					}
+					break;
+
+				case SDL_EVENT_MOUSE_MOTION:
+					if (dragging) {
+						float global_x = event.motion.x;
+						float global_y = event.motion.y;
+
+						int win_x, win_y;
+						SDL_GetGlobalMouseState(&global_x, &global_y); 
+						SDL_SetWindowPosition(window, global_x - drag_offset_x, global_y - drag_offset_y);
+					}
+					break;
 			}
 
 			CameraManager::Instance().Input(&event);
