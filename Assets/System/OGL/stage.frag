@@ -3,6 +3,7 @@
 in VS_OUT {
     vec3 FragPos;
     vec2 TexCoords;
+    vec2 TexCoords2;
     mat3 TBN;
 } fs_in;
 
@@ -13,6 +14,7 @@ uniform vec3 viewPos;
 
 uniform sampler2D diffuseMap;
 uniform sampler2D normalMap;
+uniform sampler2D lightingMap;
 
 void main()
 {
@@ -37,5 +39,7 @@ void main()
 
     vec3 ambient = 0.1 * diffuseColor;
 
-    FragColor = vec4(ambient + diffuse + specular, 1.0);
+    vec3 lighting = texture(lightingMap, fs_in.TexCoords2).rgb;
+
+    FragColor = vec4(ambient + diffuse + specular + lighting, 1.0);
 }

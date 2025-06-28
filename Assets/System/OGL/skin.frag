@@ -23,7 +23,6 @@ void main()
 
     vec4 diffuseSample = texture(diffuseMap, fs_in.TexCoords);
     vec3 diffuseColor = diffuseSample.rgb;
-    float specularStrength = diffuseSample.a; 
 
     vec3 light = normalize(-lightDir);
     vec3 viewDir = normalize(viewPos - fs_in.FragPos);
@@ -32,10 +31,8 @@ void main()
     vec3 diffuse = diff * diffuseColor * 2.0;
 
     vec3 halfwayDir = normalize(light + viewDir);
-    float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0); 
-    vec3 specular = specularStrength * spec * vec3(1.0);
 
     vec3 ambient = 0.1 * diffuseColor;
 
-    FragColor = vec4(ambient + diffuse + specular, 1.0);
+    FragColor = vec4(ambient + diffuse, 1.0);
 }
