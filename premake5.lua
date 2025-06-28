@@ -170,6 +170,7 @@ workspace "CruelerThanDAT"
 			"depends/imstb/",
 			"depends/json/",
 			"depends/GLAD/include",
+			"depends/gli",
 		}
 
 		filter { "toolset:clang" }

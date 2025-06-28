@@ -19,7 +19,11 @@
 #include "UVD.h"
 #include <Wwise/wwise.h>
 #include <glad/glad.h>
-
+#include "shader.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <Camera.h>
 /**/
 
 
@@ -70,6 +74,8 @@ namespace HelperFunction {
 
 
 	float HalfToFloat(uint16_t h);
+	MGRVector DecodeNormal(uint32_t packed);
+	glm::vec4 DecodeTangent(uint32_t packedTangent);
 
 	bool WriteVectorToFile(const std::vector<char> dataVec, const std::string& filename);
 }
@@ -98,7 +104,7 @@ public:
 	std::vector<FileNode*> children;
 	std::vector<char> fileData;
 	FileNodeTypes nodeType;
-	FileNode* parent;
+	FileNode* parent = nullptr;
 	LPCWSTR fileFilter = L"All Files(*.*)\0*.*;\0";
 	bool loadFailed = false;
 	bool isEdited = false;
@@ -601,10 +607,15 @@ public:
 				for (UvdEntry entry : uvdEntries) {
 					if (textureMap.find(entry.textureID) != textureMap.end()) {
 
-						D3DSURFACE_DESC desc;
-						textureMap[entry.textureID]->GetLevelDesc(0, &desc);  // Get info for mip level 0 (the base level)
-						UINT texWidth = desc.Width;
-						UINT texHeight = desc.Height;
+						GLint texWidth;
+						GLint texHeight;
+
+						glBindTexture(GL_TEXTURE_2D, textureMap[entry.textureID]);
+
+						glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
+						glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
+
+
 						ImVec2 uv0(entry.x / (float)texWidth, entry.y / (float)texHeight);
 						ImVec2 uv1((entry.x + entry.width) / (float)texWidth, (entry.y + entry.height) / (float)texHeight);
 						ImGui::Image((ImTextureID)(intptr_t)textureMap[entry.textureID], ImVec2(64, 64), uv0, uv1);
@@ -837,10 +848,13 @@ public:
 					for (UvdEntry uvdEntry : pairedUVD->uvdEntries) {
 						if (uvdEntry.ID == entry.data1.dataStructure.img.uvdID) {
 							associatedUVDEntry = uvdEntry;
-							D3DSURFACE_DESC desc;
-							textureMap[uvdEntry.textureID]->GetLevelDesc(0, &desc);  // Get info for mip level 0 (the base level)
-							UINT texWidth = desc.Width;
-							UINT texHeight = desc.Height;
+							GLint texWidth;
+							GLint texHeight;
+
+							glBindTexture(GL_TEXTURE_2D, textureMap[uvdEntry.textureID]);
+
+							glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
+							glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
 							ImVec2 uv0(uvdEntry.x / (float)texWidth, uvdEntry.y / (float)texHeight);
 							ImVec2 uv1((uvdEntry.x + uvdEntry.width) / (float)texWidth, (uvdEntry.y + uvdEntry.height) / (float)texHeight);
 						
@@ -901,10 +915,13 @@ public:
 				float scaley = entry.position.y * (360.0f / 720.0f) + 100.0f;
 
 				if (foundUVD) {
-					D3DSURFACE_DESC desc;
-					textureMap[associatedUVDEntry.textureID]->GetLevelDesc(0, &desc);  // Get info for mip level 0 (the base level)
-					UINT texWidth = desc.Width;
-					UINT texHeight = desc.Height;
+					GLint texWidth;
+					GLint texHeight;
+
+					glBindTexture(GL_TEXTURE_2D, textureMap[associatedUVDEntry.textureID]);
+
+					glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
+					glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
 					ImVec2 uv0(associatedUVDEntry.x / (float)texWidth, associatedUVDEntry.y / (float)texHeight);
 					ImVec2 uv1((associatedUVDEntry.x + associatedUVDEntry.width) / (float)texWidth, (associatedUVDEntry.y + associatedUVDEntry.height) / (float)texHeight);
 					ImVec2 screenPos = ImVec2(scalex, scaley); // top-left position
@@ -1572,6 +1589,7 @@ public:
 
 			reader.Seek(mat.offsetShaderName);
 			cmat.shader_name = reader.ReadString(16);
+			cmat.shader_name.erase(std::remove(cmat.shader_name.begin(), cmat.shader_name.end(), '\0'), cmat.shader_name.end()); // sanatize
 			reader.Seek(mat.offsetTextures);
 			std::vector<WMBTexture> textureMappings;
 			for (int j = 0; j < mat.numTextures; j++) {
@@ -1681,6 +1699,16 @@ public:
 						cvtx.x = vertex.position.x;
 						cvtx.y = vertex.position.y;
 						cvtx.z = vertex.position.z;
+						MGRVector normals = HelperFunction::DecodeNormal(vertex.normals);	
+						cvtx.nx = normals.x;
+						cvtx.ny = normals.y;
+						cvtx.nz = normals.z;
+						glm::vec4 tangents = HelperFunction::DecodeTangent(vertex.tangents);
+						cvtx.tx = tangents.x;
+						cvtx.ty = tangents.y;
+						cvtx.tz = tangents.z;
+						cvtx.tw = tangents.w;
+
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
 						cvtx.color = 0xFFFFFFFF; // white, RGBA as uint32
@@ -1715,6 +1743,15 @@ public:
 						cvtx.x = vertex.position.x;
 						cvtx.y = vertex.position.y;
 						cvtx.z = vertex.position.z;
+						MGRVector normals = HelperFunction::DecodeNormal(vertex.normals);
+						cvtx.nx = normals.x;
+						cvtx.ny = normals.y;
+						cvtx.nz = normals.z;
+						glm::vec4 tangents = HelperFunction::DecodeTangent(vertex.tangents);
+						cvtx.tx = tangents.x;
+						cvtx.ty = tangents.y;
+						cvtx.tz = tangents.z;
+						cvtx.tw = tangents.w;
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
 						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
@@ -1753,8 +1790,19 @@ public:
 						cvtx.x = vertex.position.x;
 						cvtx.y = vertex.position.y;
 						cvtx.z = vertex.position.z;
+						MGRVector normals = HelperFunction::DecodeNormal(vertex.normals);
+						cvtx.nx = normals.x;
+						cvtx.ny = normals.y;
+						cvtx.nz = normals.z;
+						glm::vec4 tangents = HelperFunction::DecodeTangent(vertex.tangents);
+						cvtx.tx = tangents.x;
+						cvtx.ty = tangents.y;
+						cvtx.tz = tangents.z;
+						cvtx.tw = tangents.w;
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
+						cvtx.u2 = HelperFunction::HalfToFloat(vertex.uv2.u);
+						cvtx.v2 = HelperFunction::HalfToFloat(vertex.uv2.v);
 						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
 						convertedVtx.push_back(cvtx);
 					}
@@ -1787,12 +1835,18 @@ public:
 					for (WMBVertex65799& vertex : vertexes) {
 						CUSTOMVERTEX cvtx;
 
-
-
-
 						cvtx.x = vertex.position.x;
 						cvtx.y = vertex.position.y;
 						cvtx.z = vertex.position.z;
+						MGRVector normals = HelperFunction::DecodeNormal(vertex.normals);
+						cvtx.nx = normals.x;
+						cvtx.ny = normals.y;
+						cvtx.nz = normals.z;
+						glm::vec4 tangents = HelperFunction::DecodeTangent(vertex.tangents);
+						cvtx.tx = tangents.x;
+						cvtx.ty = tangents.y;
+						cvtx.tz = tangents.z;
+						cvtx.tw = tangents.w;
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
 						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
@@ -1817,7 +1871,6 @@ public:
 				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
 
-				// Set up vertex attributes
 				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)0);
 				glEnableVertexAttribArray(0);
 
@@ -1825,6 +1878,15 @@ public:
 				glEnableVertexAttribArray(1);
 
 				glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(3 * sizeof(float) + sizeof(DWORD)));
+				glEnableVertexAttribArray(2);
+
+				glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(2 * sizeof(float) + 3 * sizeof(float) + sizeof(DWORD))); // Normals
+				glEnableVertexAttribArray(3);
+
+				glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(2 * sizeof(float) + 3 * sizeof(float) + 3 * sizeof(float) + sizeof(DWORD))); // Normals
+				glEnableVertexAttribArray(4);
+
+				glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)(2 * sizeof(float) + 3 * sizeof(float) + 3 * sizeof(float) + 3 * sizeof(float) + sizeof(DWORD))); // Lightmap UV
 				glEnableVertexAttribArray(2);
 
 				glBindVertexArray(0);
@@ -1979,24 +2041,8 @@ public:
 		for (CruelerMesh* mesh : displayMeshes) {
 			if (mesh->visibility) {
 				for (CruelerBatch* batch : mesh->batches) {
-					/*if (isSCR) {
-						if (textureMap.find(mesh->materials[batch->materialID]->texture_data[0]) != textureMap.end()) {
-							g_pd3dDevice->SetTexture(0, textureMap[mesh->materials[batch->materialID]->texture_data[0]]);
-						}
-						else {
-							g_pd3dDevice->SetTexture(0, textureMap[0]);
-						}
-					}
-					else {
-						if (textureMap.find(materials[batch->materialID].texture_data[0]) != textureMap.end()) { // hack 
-							g_pd3dDevice->SetTexture(0, textureMap[materials[batch->materialID].texture_data[0]]);
-						}
-						else {
-							g_pd3dDevice->SetTexture(0, textureMap[0]);
-						}
-					}
 
-
+					/*
 					if (isSCR) {
 						D3DXMATRIX matScale, matRot, matTrans, matWorld;
 						D3DXMatrixScaling(&matScale, scaleOffset.x, scaleOffset.y, scaleOffset.z);
@@ -2005,6 +2051,106 @@ public:
 						matWorld = matScale * matRot * matTrans;
 						g_pd3dDevice->SetTransform(D3DTS_WORLD, &matWorld);
 					}*/
+
+					glm::mat4 model = glm::mat4(1.0f);
+					glm::mat4 view = CameraManager::Instance().GetMatrixV();
+					glm::mat4 projection = CameraManager::Instance().GetMatrixP();
+					glm::vec3 viewPos(0.0f, 0.0f, 10.0f);
+					glm::vec3 lightPos(10.0f, 10.0f, 10.0f);
+
+
+					unsigned int targetShader = 0;
+
+					if (isSCR) {
+						model = glm::translate(model, glm::vec3(meshOffset.x, meshOffset.y, meshOffset.z));
+						glm::quat rotation = glm::quat(glm::vec3(0.0f, 0.0f, 0.0f));
+						model *= glm::toMat4(rotation);
+						model = glm::scale(model, glm::vec3(scaleOffset.x, scaleOffset.y, scaleOffset.z));
+
+						if (textureMap.find(materials[batch->materialID].texture_data[0]) != textureMap.end()) {
+							glDepthMask(GL_TRUE);
+							glDisable(GL_BLEND);
+
+							glUseProgram(ShaderManager::Instance().stageShader);
+							targetShader = ShaderManager::Instance().stageShader;
+							glActiveTexture(GL_TEXTURE0);
+							glBindTexture(GL_TEXTURE_2D, textureMap[materials[batch->materialID].texture_data[0]]);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "diffuseMap"), 0);
+
+							glActiveTexture(GL_TEXTURE1);
+							glBindTexture(GL_TEXTURE_2D, textureMap[materials[batch->materialID].texture_data[2]]);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "normalMap"), 1);
+
+							glActiveTexture(GL_TEXTURE2);
+							glBindTexture(GL_TEXTURE_2D, textureMap[materials[batch->materialID].texture_data[7]]);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "lightingMap"), 2);
+							
+						}
+						else {
+							targetShader = ShaderManager::Instance().defaultShader;
+							glUseProgram(ShaderManager::Instance().defaultShader);
+							glActiveTexture(GL_TEXTURE0);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+						}
+					}
+					else {
+						if (textureMap.find(materials[batch->materialID].texture_data[0]) != textureMap.end()) {
+							glDepthMask(GL_TRUE);
+							glDisable(GL_BLEND);
+							
+
+							if (materials[batch->materialID].shader_name == "ois02_sbxeX" || materials[batch->materialID].shader_name == "ois02_xbceX" || materials[batch->materialID].shader_name == "ois02_sbceX") {
+								glUseProgram(ShaderManager::Instance().decalShader);
+								targetShader = ShaderManager::Instance().decalShader;
+								glActiveTexture(GL_TEXTURE0);
+								glBindTexture(GL_TEXTURE_2D, textureMap[materials[batch->materialID].texture_data[0]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().decalShader, "diffuseMap"), 0);
+								glEnable(GL_BLEND);
+								glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+							}
+							else if (materials[batch->materialID].shader_name.find("skn") != std::string::npos) {
+								glUseProgram(ShaderManager::Instance().skinShader);
+								targetShader = ShaderManager::Instance().skinShader;
+								glActiveTexture(GL_TEXTURE0);
+								glBindTexture(GL_TEXTURE_2D, textureMap[materials[batch->materialID].texture_data[0]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().skinShader, "diffuseMap"), 0);
+
+								glActiveTexture(GL_TEXTURE1);
+								glBindTexture(GL_TEXTURE_2D, textureMap[materials[batch->materialID].texture_data[2]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().skinShader, "normalMap"), 1);
+							}
+							else {
+								glUseProgram(ShaderManager::Instance().defaultShader);
+								targetShader = ShaderManager::Instance().defaultShader;
+								glActiveTexture(GL_TEXTURE0);
+								glBindTexture(GL_TEXTURE_2D, textureMap[materials[batch->materialID].texture_data[0]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+
+								glActiveTexture(GL_TEXTURE1);
+								glBindTexture(GL_TEXTURE_2D, textureMap[materials[batch->materialID].texture_data[2]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "normalMap"), 1);
+
+
+							}
+						}
+						else {
+							targetShader = ShaderManager::Instance().defaultShader;
+							glUseProgram(ShaderManager::Instance().defaultShader);
+							glActiveTexture(GL_TEXTURE0);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+						}
+					}
+
+
+
+
+
+					glUniformMatrix4fv(glGetUniformLocation(targetShader, "model"), 1, GL_FALSE, glm::value_ptr(model));
+					glUniformMatrix4fv(glGetUniformLocation(targetShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+					glUniformMatrix4fv(glGetUniformLocation(targetShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+					glm::vec3 lightDir = glm::normalize(glm::vec3(0, -1.0f, -1.0f)); // example light direction
+					glUniform3fv(glGetUniformLocation(targetShader, "lightDir"), 1, glm::value_ptr(lightDir));
+					glUniform3fv(glGetUniformLocation(targetShader, "viewPos"), 1, glm::value_ptr(viewPos));
 
 					glBindVertexArray(batch->vao); 
 
@@ -2373,22 +2519,31 @@ public:
 				ImGui::PopStyleColor();
 				ImGui::EndTabItem();
 			}
-			if (ImGui::BeginTabItem("Animation")) {
-				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
-				ImGui::BeginChild("AnimSidebar", ImVec2(325, 0));
-				
+			if (parent) {
 				for (FileNode* fNode : parent->children) {
 					if (fNode->nodeType == MOT) {
-						ImGui::Text(fNode->fileName.c_str());
+						if (ImGui::BeginTabItem("Animation")) {
+							ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
+							ImGui::BeginChild("AnimSidebar", ImVec2(325, 0));
+
+							for (FileNode* fNode : parent->children) {
+								if (fNode->nodeType == MOT) {
+									ImGui::Text(fNode->fileName.c_str());
+								}
+							}
+
+
+
+							ImGui::EndChild();
+							ImGui::PopStyleColor();
+							ImGui::EndTabItem();
+						};
+						break;
 					}
 				}
-
-
-
-				ImGui::EndChild();
-				ImGui::PopStyleColor();
-				ImGui::EndTabItem();
 			}
+
+
 
 			if (ImGui::BeginTabItem("Physics")) {
 				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));

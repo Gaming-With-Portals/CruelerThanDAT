@@ -12,7 +12,7 @@
 
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
-
+#include "gli/gli.hpp"
 
 #include "CruelerThanDAT.h"
 #include "globals.h"
@@ -36,6 +36,8 @@ static bool                     g_DeviceLost = false;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
 static D3DPRESENT_PARAMETERS    g_d3dpp = {};
 static bool hasReset = false;
+unsigned int fbo, colorTex, depthRbo;
+int last_fbo_res_x, last_fbo_res_y;
 
 static SDL_Window* window = nullptr;
 
@@ -68,7 +70,7 @@ bool hasHandledArguments = false;
 bool showViewport = true;
 
 std::string downloadURL = "";
-static std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
+static std::unordered_map<unsigned int, unsigned int> textureMap;
 static LPDIRECT3DTEXTURE9 applicationIcon;
 static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 
@@ -201,7 +203,28 @@ namespace HelperFunction {
 	}
 }
 
+void CreateFramebuffer(int res_x, int res_y) {
+	last_fbo_res_x = res_x;
+	last_fbo_res_y = res_y;
 
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	glGenTextures(1, &colorTex);
+	glBindTexture(GL_TEXTURE_2D, colorTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, res_x, res_y, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
+
+	glGenRenderbuffers(1, &depthRbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, depthRbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, res_x, res_y);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthRbo);
+
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
 
 void CreateViewportRT(int width, int height)
@@ -287,14 +310,29 @@ void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
 		LPDIRECT3DTEXTURE9 tmpTexture;
 		WTP.Seek(offsets[i]);
 		std::vector<char> data = WTP.ReadBytes(sizes[i]);
-		LPCVOID ptr = static_cast<LPCVOID>(data.data());
-		HRESULT hr = D3DXCreateTextureFromFileInMemory(g_pd3dDevice, ptr, sizes[i], &tmpTexture);
-		if (FAILED(hr)) {
+		gli::texture tex = gli::load(data.data(), data.size());
+		if (tex.empty()) {
 			CTDLog::Log::getInstance().LogError("Failed to load texture");
 		}
 		else {
+			unsigned int textureID;
+			glGenTextures(1, &textureID);
+
+			gli::gl GL(gli::gl::PROFILE_GL33);
+			gli::gl::format const Format = GL.translate(tex.format(), tex.swizzles());
+			GLenum target = GL.translate(tex.target());
+
+			glBindTexture(target, textureID);
+
+			for (std::size_t Level = 0; Level < tex.levels(); ++Level) {
+				glm::tvec3<GLsizei> extent(tex.extent(Level));
+				glCompressedTexImage2D(target, static_cast<GLint>(Level), Format.Internal, extent.x, extent.y, 0, static_cast<GLsizei>(tex.size(Level)), tex.data(0, 0, Level));
+			}
+
+			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			rawTextureInfo[idx[i]] = data;
-			textureMap[idx[i]] = tmpTexture;
+			textureMap[idx[i]] = textureID;
 		}
 
 	}
@@ -423,106 +461,6 @@ void SelfUpdate() {
 
 
 }
-int lastMouseX = 0;
-int lastMouseY = 0;
-bool isDragging = false;
-
-LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-
-	switch (msg)
-	{
-	case WM_LBUTTONDOWN:
-	{
-		isDragging = true;
-		lastMouseX = LOWORD(lParam);
-		lastMouseY = HIWORD(lParam);
-		SetCapture(hWnd); // lock mouse input to window
-		break;
-	}
-
-	case WM_LBUTTONUP:
-	{
-		isDragging = false;
-		ReleaseCapture();
-		break;
-	}
-
-	case WM_MOUSEMOVE:
-	{
-		if (isDragging)
-		{
-			int x = LOWORD(lParam);
-			int y = HIWORD(lParam);
-
-			int dx = x - lastMouseX;
-			int dy = y - lastMouseY;
-
-			lastMouseX = x;
-			lastMouseY = y;
-
-			float sensitivity = 0.01f;
-			yaw += dx * sensitivity;
-			pitch += dy * sensitivity;
-		}
-		break;
-	}
-	case WM_MOUSEWHEEL:
-	{
-		short delta = GET_WHEEL_DELTA_WPARAM(wParam); // +120 or -120
-		float scrollSpeed = 5.0f; // tweak for sensitivity
-		radius -= (delta / 120.0f) * scrollSpeed;
-
-
-		radius = std::max(2.0f, std::min(1000.0f, radius));
-		break;
-	}
-
-	case WM_SIZE:
-		if (wParam == SIZE_MINIMIZED)
-			return 0;
-		g_ResizeWidth = (UINT)LOWORD(lParam); // Queue resize
-		g_ResizeHeight = (UINT)HIWORD(lParam);
-		return 0;
-	case WM_SYSCOMMAND:
-		if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
-			return 0;
-		break;
-	case WM_DESTROY:
-		::PostQuitMessage(0);
-		return 0;
-	case WM_CREATE:
-		DragAcceptFiles(hWnd, TRUE);  // Enable drag-and-drop
-		break;
-	case WM_DROPFILES: {
-		HDROP hDrop = (HDROP)wParam;
-		wchar_t filePath[MAX_PATH] = { 0 };
-
-		// Get the first dropped file (you can loop for multiple files)
-		if (DragQueryFileW(hDrop, 0, filePath, MAX_PATH)) {
-
-			openFiles.push_back(FileNodeFromFilepath(WCharToString(filePath)));
-			if (appConfig.AutomaticallyLoadTextures) {
-				PopulateTextures();
-			}
-
-			// TODO: Process the file (load texture, model, etc.)
-		}
-
-		DragFinish(hDrop); // Free resources
-		break;
-	}
-	case WM_EXITSIZEMOVE:
-	case WM_CAPTURECHANGED:
-		// Tell ImGui to clear mouse drag/active states here
-		ImGui::GetIO().MouseDown[0] = false;
-		ImGui::GetIO().MouseDown[1] = false;
-		ImGui::GetIO().MouseDown[2] = false;
-		break;
-	}
-	return ::DefWindowProcW(hWnd, msg, wParam, lParam);
-}
-
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 {
@@ -553,17 +491,16 @@ void RenderFrame() {
 	static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
 	(void)cameraVec;
 	static bool spinModel = false;
-	/*g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);*/
 
 	// Start the ImGui frame
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
-
+	glViewport(0, 0, (int)RES_X, (int)RES_Y);
+	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X), 26));
 
@@ -789,14 +726,16 @@ void RenderFrame() {
 
 					ImGui::EndTabItem();
 				}
+				if (!wmbNode->isSCR) {
+					if (ImGui::BeginTabItem("Skeleton")) {
 
-				if (ImGui::BeginTabItem("Skeleton")) {
-					
-					wmbNode->RenderBoneGUI();
+						wmbNode->RenderBoneGUI();
 
 
-					ImGui::EndTabItem();
+						ImGui::EndTabItem();
+					}
 				}
+
 
 				if (wmbNode->isSCR) {
 					if (ImGui::BeginTabItem("SCR Options")) {
@@ -822,11 +761,18 @@ void RenderFrame() {
 
 	}
 
-	ImVec2 pos = ImVec2(350, 36);
+	ImVec2 pos = ImGui::GetWindowPos();
 	ImVec2 size = ImGui::GetWindowSize();
-	//ImGui::GetBackgroundDrawList()->AddImage(
-	//	(void*)g_RenderTargetTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y));
-
+	ImGui::GetBackgroundDrawList()->AddImage(
+		(ImTextureID)(uintptr_t)colorTex, pos, ImVec2(pos.x + size.x, pos.y + size.y), ImVec2(0, 1), ImVec2(1, 0));
+	if (last_fbo_res_x != size.x || last_fbo_res_y != size.y) {
+		glDeleteTextures(1, &colorTex);
+		glDeleteRenderbuffers(1, &depthRbo);
+		glDeleteFramebuffers(1, &fbo);
+		CreateFramebuffer(size.x, size.y);
+		CameraManager::Instance().SetWindowSize(size.x, size.y);
+		CameraManager::Instance().SetWindowPos(pos.x, pos.y);
+	}
 
 	ImGui::End();
 
@@ -940,6 +886,12 @@ void RenderFrame() {
 	//	D3DCOLORWRITEENABLE_BLUE);
 
 	const float pointSize = 5.0f;
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glViewport(0, 0, last_fbo_res_x, last_fbo_res_y);
+	glEnable(GL_DEPTH_TEST);
+
+	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
 		WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
@@ -960,15 +912,11 @@ void RenderFrame() {
 
 
 	}
-
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	ImGui::EndFrame();
 
 	ImGui::Render();
 
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	glViewport(0, 0, (int)RES_X, (int)RES_Y);
-	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 	SDL_GL_SwapWindow(window);
 
@@ -1092,7 +1040,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 	CTDLog::Log::getInstance().LogNote("CruelerThanDAT Ready");
 
 	SelfUpdate();
-
+	CreateFramebuffer(32, 32);
 	bool done = false;
 	while (!done)
 	{
@@ -1113,6 +1061,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 					break;
 				}
 			}
+
+			CameraManager::Instance().Input(&event);
 
 		}
 		if (done)

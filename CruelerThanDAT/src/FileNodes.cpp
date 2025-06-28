@@ -85,6 +85,43 @@ int HelperFunction::Align(int value, int alignment) {
 	return (value + (alignment - 1)) & ~(alignment - 1);
 }
 
+glm::vec4 HelperFunction::DecodeTangent(uint32_t packedTangent) {
+
+	uint8_t tx = (packedTangent >> 0) & 0xFF;
+	uint8_t ty = (packedTangent >> 8) & 0xFF;
+	uint8_t tz = (packedTangent >> 16) & 0xFF;
+	uint8_t tw = (packedTangent >> 24) & 0xFF;
+
+	auto decodeByte = [](uint8_t v) -> float {
+		return (static_cast<float>(v) - 127.0f) / 127.0f;
+		};
+
+	glm::vec4 tangent;
+	tangent.x = decodeByte(tx);
+	tangent.y = decodeByte(ty);
+	tangent.z = decodeByte(tz);
+	tangent.w = decodeByte(tw);
+
+	return tangent;
+}
+
+MGRVector HelperFunction::DecodeNormal(uint32_t packed) {
+	int nx = packed & ((1 << 11) - 1);
+	int ny = (packed >> 11) & ((1 << 11) - 1);
+	int nz = (packed >> 22) & ((1 << 10) - 1);
+
+	if (nx & (1 << 10)) nx = -(int)((1 << 11) - nx);
+	if (ny & (1 << 10)) ny = -(int)((1 << 11) - ny);
+	if (nz & (1 << 9))  nz = -(int)((1 << 10) - nz);
+
+	float fx = (float)nx / ((1 << 10) - 1);
+	float fy = (float)ny / ((1 << 10) - 1);
+	float fz = (float)nz / ((1 << 9) - 1);
+
+	float len = sqrtf(fx * fx + fy * fy + fz * fz);
+	return { fx / len, fy / len, fz / len };
+}
+
 float HelperFunction::HalfToFloat(uint16_t h) {
 	uint16_t h_exp = (h & 0x7C00) >> 10;  // exponent
 	uint16_t h_sig = h & 0x03FF;          // significand
