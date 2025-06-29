@@ -24,6 +24,7 @@
 #include "FileUtils.h"
 #include "CTDSettings.h"
 #include "CPKManager.h"
+#include <TextureHelper.h>
 
 
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
@@ -364,7 +365,7 @@ void PopulateTextures() {
 						BinaryReader wtp = BinaryReader(wtpFile->fileData);
 						wta.SetEndianess(node->fileIsBigEndian);
 
-						DX9WTAWTPLoad(wta, wtp);
+						TextureHelper::LoadData(wta, wtp, textureMap);
 						return;
 					}
 
@@ -374,7 +375,7 @@ void PopulateTextures() {
 					BinaryReader wtp = BinaryReader(dtnode->fileData);
 					wta.SetEndianess(node->fileIsBigEndian);
 
-					DX9WTAWTPLoad(wta, wtp);
+					TextureHelper::LoadData(wta, wtp, textureMap);
 					return;
 				}
 			}
@@ -394,7 +395,7 @@ void PopulateTextures() {
 						BinaryReader wtp = BinaryReader(wtpFile->fileData);
 						wta.SetEndianess(node->fileIsBigEndian);
 
-						DX9WTAWTPLoad(wta, wtp);
+						TextureHelper::LoadData(wta, wtp, textureMap);
 
 						printf("Loading textures...");
 						return;
@@ -406,7 +407,7 @@ void PopulateTextures() {
 					BinaryReader wtp = BinaryReader(dtnode->fileData);
 					wta.SetEndianess(node->fileIsBigEndian);
 
-					DX9WTAWTPLoad(wta, wtp);
+					TextureHelper::LoadData(wta, wtp, textureMap);
 					return;
 				}
 			}
