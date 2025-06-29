@@ -168,10 +168,11 @@ workspace "CruelerThanDAT"
 			"depends/json/",
 			"depends/GLAD/include",
 			"depends/gli",
+			"depends/glm",
 		}
 
 		filter { "toolset:clang" }
-			buildoptions "-Wall"
+			buildoptions {"-Wno-all","-Wno-error",}
 		filter { "toolset:msc" }
 			warnings "High"
 		filter { "files:depends/imgui/**.cpp", "toolset:clang" }
