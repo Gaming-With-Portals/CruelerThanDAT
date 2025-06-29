@@ -66,7 +66,6 @@ namespace BXMInternal {
 void closeNode(FileNode* target);
 
 namespace HelperFunction {
-	bool WorldToScreen(const D3DXVECTOR3& worldPos, D3DXVECTOR3& screenPos, const D3DXMATRIX& view, const D3DXMATRIX& proj, const D3DVIEWPORT9& viewport);
 
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess = false, bool bigEndian = false);
 
@@ -1392,11 +1391,11 @@ struct CruelerBone {
 	int parentIndex;
 	int boneID;
 	bool selected = false;
-	D3DXVECTOR3 localPosition;
-	D3DXVECTOR3 worldPosition;
-	D3DXMATRIX localTransform;
-	D3DXMATRIX combinedTransform;
-	D3DXMATRIX offsetMatrix; 
+	glm::vec3 localPosition;
+	glm::vec3 worldPosition;
+	glm::mat4 localTransform;
+	glm::mat4 combinedTransform;
+	glm::mat4 offsetMatrix; 
 };
 
 class CruelerBatch {
@@ -1543,10 +1542,10 @@ public:
 			reader.ReadINT16();
 			bone.parentIndex = reader.ReadINT16();
 			reader.ReadUINT16(); // Unknown
-			bone.localPosition = D3DXVECTOR3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
-			bone.worldPosition = D3DXVECTOR3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
+			bone.localPosition = glm::vec3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
+			bone.worldPosition = glm::vec3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
 
-			D3DXMatrixTranslation(&bone.localTransform, bone.localPosition.x, bone.localPosition.y, bone.localPosition.z);
+			bone.localTransform = glm::translate(bone.localTransform, bone.localPosition);
 
 			bones.push_back(bone);
 		}
@@ -1559,7 +1558,7 @@ public:
 			}
 		}
 		for (uint32_t i = 0; i < header.numBones; i++) {
-			D3DXMatrixInverse(&bones[i].offsetMatrix, nullptr, &bones[i].combinedTransform);
+			bones[i].offsetMatrix = glm::inverse(bones[i].combinedTransform);
 		}
 
 
@@ -1711,7 +1710,7 @@ public:
 
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
-						cvtx.color = 0xFFFFFFFF; // white, RGBA as uint32
+						cvtx.color = 0xFFFFFFFF;
 						convertedVtx.push_back(cvtx);
 					}
 
@@ -1754,7 +1753,7 @@ public:
 						cvtx.tw = tangents.w;
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
-						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+						cvtx.color = 0xFFFFFFFF;
 						convertedVtx.push_back(cvtx);
 					}
 
@@ -1803,7 +1802,7 @@ public:
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
 						cvtx.u2 = HelperFunction::HalfToFloat(vertex.uv2.u);
 						cvtx.v2 = HelperFunction::HalfToFloat(vertex.uv2.v);
-						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+						cvtx.color = 0xFFFFFFFF;
 						convertedVtx.push_back(cvtx);
 					}
 
@@ -1849,7 +1848,7 @@ public:
 						cvtx.tw = tangents.w;
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
-						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+						cvtx.color = 0xFFFFFFFF;
 						convertedVtx.push_back(cvtx);
 					}
 
@@ -2792,7 +2791,7 @@ public:
 
 
 					if (type == 0x4) {
-						BnkEventObject evnObj{ type, size, uid };
+						BnkEventObject evnObj{ static_cast<uint8_t>(type), size, uid };
 						int eventCounts = reader.ReadUINT32();
 						for (int i = 0; i < eventCounts; i++) {
 							evnObj.ids.push_back(reader.ReadUINT32());
