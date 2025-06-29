@@ -760,6 +760,38 @@ void RenderFrame() {
 			}
 
 
+			ImVec2 windowSize = ImGui::GetWindowSize();
+			ImVec2 windowPos = ImGui::GetWindowPos();
+
+			ImGui::SetCursorScreenPos(ImVec2(windowPos.x + windowSize.x - 30.0f, windowPos.y + 80));
+
+			if (ImGui::ArrowButton("##PopoutToggle", (ImGuiDir)wmbNode->visualizerPopout))
+				wmbNode->visualizerPopout = !wmbNode->visualizerPopout;
+
+			if (wmbNode->visualizerPopout)
+			{
+				float popoutWidth = 200.0f;
+				float popoutHeight = 150.0f;
+
+				ImVec2 popoutPos = ImVec2(ImVec2(windowPos.x + windowSize.x - 30.0f, windowPos.y + 80).x - popoutWidth, ImVec2(windowPos.x + windowSize.x - 30.0f, windowPos.y + 80).y);
+
+				ImGui::SetNextWindowPos(popoutPos);
+				ImGui::SetNextWindowSize(ImVec2(popoutWidth, popoutHeight));
+				ImGui::Begin("WMB_POPOUT", &wmbNode->visualizerPopout,
+					ImGuiWindowFlags_NoTitleBar |
+					ImGuiWindowFlags_NoResize |
+					ImGuiWindowFlags_AlwaysAutoResize |
+					ImGuiWindowFlags_NoMove |
+					ImGuiWindowFlags_NoCollapse |
+					ImGuiWindowFlags_NoSavedSettings);
+
+
+				ImGui::Checkbox("Show Bones", &wmbNode->visualizerShowBones);
+				ImGui::SeparatorText("Render Mode");
+				ImGui::Checkbox("Wireframe", &wmbNode->visualizerWireframe);
+
+				ImGui::End();
+			}
 
 		}
 
@@ -958,9 +990,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 		std::cin.get();
 	}
 	else if (!std::filesystem::exists("Assets/Model")) {
-		printf("DirectX Data is missing or corrupt. (Case 0)");
+		printf("OpenGL Data is missing or corrupt. (Case 0)");
 		std::cin.get();
 	}
+
 
 	themeManager = new ThemeManager();
 	themeManager->UpdateThemeList();
@@ -992,6 +1025,18 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 	if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
 		return SDL_APP_FAILURE;
 	}
+
+
+	DatFileNode* ctd_data = (DatFileNode*)FileNodeFromFilepath("Assets/ctd.dat");
+	for (FileNode* node : ctd_data->children) {
+		if (node->nodeType == WTB) {
+
+			BinaryReader br1(node->fileData), br2(node->fileData);
+			TextureHelper::LoadData(br1, br2, textureMap);
+			break;
+		}
+	}
+	delete ctd_data;
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();

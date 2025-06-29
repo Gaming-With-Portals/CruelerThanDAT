@@ -35,26 +35,17 @@ bool HelperFunction::WriteVectorToFile(const std::vector<char> dataVec, const st
 	return out.good();
 }
 
-bool HelperFunction::WorldToScreen(const D3DXVECTOR3& worldPos, D3DXVECTOR3& screenPos, const D3DXMATRIX& view, const D3DXMATRIX& proj, const D3DVIEWPORT9& viewport)
+bool HelperFunction::WorldToScreen(const glm::vec3& worldPos, glm::vec2& screenPos, const glm::mat4& view, const glm::mat4& proj, const GLint* viewport)
 {
-	D3DXMATRIX viewProj;
-	D3DXMatrixMultiply(&viewProj, &view, &proj);
+	glm::vec4 clipSpacePos = proj * view * glm::vec4(worldPos, 1.0f);
 
-	D3DXVECTOR4 temp;
-	D3DXVec3Transform(&temp, &worldPos, &viewProj);
-
-	if (temp.w <= 0.0f)
+	if (clipSpacePos.w <= 0.0f)
 		return false;
 
-	// Perspective divide
-	temp.x /= temp.w;
-	temp.y /= temp.w;
-	temp.z /= temp.w;
+	glm::vec3 ndc = glm::vec3(clipSpacePos) / clipSpacePos.w;
 
-	// Convert to screen space
-	screenPos.x = viewport.X + (1.0f + temp.x) * viewport.Width / 2.0f;
-	screenPos.y = viewport.Y + (1.0f - temp.y) * viewport.Height / 2.0f;
-	screenPos.z = temp.z;
+	screenPos.x = (ndc.x * 0.5f + 0.5f) * viewport[2] + viewport[0];
+	screenPos.y = (1.0f - (ndc.y * 0.5f + 0.5f)) * viewport[3] + viewport[1];
 
 	return true;
 }

@@ -6,6 +6,7 @@
 #define NOMINMAX
 #include "globals.h"
 #include "tinyxml2.h"
+#include "imgui_impl_opengl3.h"
 #include "BinaryHandler.h"
 #include "CodIcons.h"
 #include "Log.h"
@@ -66,7 +67,7 @@ namespace BXMInternal {
 void closeNode(FileNode* target);
 
 namespace HelperFunction {
-	bool WorldToScreen(const D3DXVECTOR3& worldPos, D3DXVECTOR3& screenPos, const D3DXMATRIX& view, const D3DXMATRIX& proj, const D3DVIEWPORT9& viewport);
+	bool WorldToScreen(const glm::vec3& worldPos, glm::vec2& screenPos, const glm::mat4& view, const glm::mat4& proj, const GLint* viewport);
 
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess = false, bool bigEndian = false);
 
@@ -1392,11 +1393,11 @@ struct CruelerBone {
 	int parentIndex;
 	int boneID;
 	bool selected = false;
-	D3DXVECTOR3 localPosition;
-	D3DXVECTOR3 worldPosition;
-	D3DXMATRIX localTransform;
-	D3DXMATRIX combinedTransform;
-	D3DXMATRIX offsetMatrix; 
+	glm::vec3 localPosition;
+	glm::vec3 worldPosition;
+	glm::mat4 localTransform;
+	glm::mat4 combinedTransform;
+	glm::mat4 offsetMatrix;
 };
 
 class CruelerBatch {
@@ -1442,6 +1443,9 @@ public:
 	bool isSCR = false;
 	float rotationAngle = 0;;
 	float scaleFactor = 0.4f;
+	bool visualizerPopout = false;
+	bool visualizerShowBones = false;
+	bool visualizerWireframe = false;
 
 	WmbFileNode(std::string fName) : FileNode(fName) {
 		fileIcon = ICON_CI_SYMBOL_METHOD;
@@ -1543,10 +1547,10 @@ public:
 			reader.ReadINT16();
 			bone.parentIndex = reader.ReadINT16();
 			reader.ReadUINT16(); // Unknown
-			bone.localPosition = D3DXVECTOR3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
-			bone.worldPosition = D3DXVECTOR3(reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat());
+			bone.localPosition = { reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat() };
+			bone.worldPosition = { reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat() };
 
-			D3DXMatrixTranslation(&bone.localTransform, bone.localPosition.x, bone.localPosition.y, bone.localPosition.z);
+			bone.localTransform = glm::translate(glm::mat4(1.0f), bone.localPosition);
 
 			bones.push_back(bone);
 		}
@@ -1559,7 +1563,7 @@ public:
 			}
 		}
 		for (uint32_t i = 0; i < header.numBones; i++) {
-			D3DXMatrixInverse(&bones[i].offsetMatrix, nullptr, &bones[i].combinedTransform);
+			bones[i].offsetMatrix = glm::inverse(bones[i].combinedTransform);
 		}
 
 
@@ -2051,19 +2055,12 @@ public:
 
 	void RenderMesh() {
 		rotationAngle += 0.01f;
+		if (visualizerWireframe) {
+			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		}
 		for (CruelerMesh* mesh : displayMeshes) {
 			if (mesh->visibility) {
 				for (CruelerBatch* batch : mesh->batches) {
-
-					/*
-					if (isSCR) {
-						D3DXMATRIX matScale, matRot, matTrans, matWorld;
-						D3DXMatrixScaling(&matScale, scaleOffset.x, scaleOffset.y, scaleOffset.z);
-						D3DXMatrixRotationYawPitchRoll(&matRot, 0.0f, 0.0f, 0.0f);
-						D3DXMatrixTranslation(&matTrans, meshOffset.x, meshOffset.y, meshOffset.z);
-						matWorld = matScale * matRot * matTrans;
-						g_pd3dDevice->SetTransform(D3DTS_WORLD, &matWorld);
-					}*/
 
 					glm::mat4 model = glm::mat4(1.0f);
 					glm::mat4 view = CameraManager::Instance().GetMatrixV();
@@ -2150,6 +2147,7 @@ public:
 							targetShader = ShaderManager::Instance().defaultShader;
 							glUseProgram(ShaderManager::Instance().defaultShader);
 							glActiveTexture(GL_TEXTURE0);
+							glBindTexture(GL_TEXTURE_2D, textureMap[0]);
 							glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
 						}
 					}
@@ -2170,6 +2168,8 @@ public:
 					glBindBuffer(GL_ARRAY_BUFFER, batch->vertexBuffer);
 					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch->indexBuffer);
 
+					
+
 					glDrawElements(GL_TRIANGLES, batch->indexCount, GL_UNSIGNED_SHORT, 0);
 				}
 
@@ -2178,70 +2178,61 @@ public:
 
 
 		}
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		static ImDrawList* drawList = new ImDrawList(ImGui::GetDrawListSharedData());
+		drawList->_ResetForNewFrame();
+		drawList->PushClipRectFullScreen();
+		drawList->PushTextureID(ImGui::GetIO().Fonts->TexID);
 
-		/*ImDrawList* drawList = ImGui::GetForegroundDrawList();
-		D3DXMATRIX view, proj;
-		g_pd3dDevice->GetTransform(D3DTS_VIEW, &view);
-		g_pd3dDevice->GetTransform(D3DTS_PROJECTION, &proj);
-		D3DVIEWPORT9 viewport;
-		g_pd3dDevice->GetViewport(&viewport);
+		glm::mat4 viewMatrix = CameraManager::Instance().GetMatrixV();
+		glm::mat4 projMatrix = CameraManager::Instance().GetMatrixP();
+		GLint viewport[4];
+		glGetIntegerv(GL_VIEWPORT, viewport);
 
 		for (size_t i = 0; i < bones.size(); ++i)
 		{
 			int parentIdx = bones[i].parentIndex;
-			if (parentIdx < 0) continue;
+			if (parentIdx < 0)
+				continue;
 
-			D3DXVECTOR3 bonePos = D3DXVECTOR3(
-				bones[i].combinedTransform._41,
-				bones[i].combinedTransform._42,
-				bones[i].combinedTransform._43);
-
-			D3DXVECTOR3 parentPos = D3DXVECTOR3(
-				bones[parentIdx].combinedTransform._41,
-				bones[parentIdx].combinedTransform._42,
-				bones[parentIdx].combinedTransform._43);
-
-			D3DXMATRIX fixRot;
-			D3DXMatrixRotationY(&fixRot, D3DXToRadian(90));
-
-			D3DXVECTOR4 fixedBonePos4, fixedParentPos4;
-
-			D3DXVec3Transform(&fixedBonePos4, &bonePos, &fixRot);
-			D3DXVec3Transform(&fixedParentPos4, &parentPos, &fixRot);
+			glm::vec3 bonePos = glm::vec3(bones[i].combinedTransform[3]);
+			glm::vec3 parentPos = glm::vec3(bones[parentIdx].combinedTransform[3]);
 
 
+			glm::vec2 screenA, screenB;
+			bool visibleA = HelperFunction::WorldToScreen(glm::vec3(bonePos), screenA, viewMatrix, projMatrix, viewport);
+			bool visibleB = HelperFunction::WorldToScreen(glm::vec3(parentPos), screenB, viewMatrix, projMatrix, viewport);
 
-			D3DXVECTOR3 fixedBonePos(fixedBonePos4.x, fixedBonePos4.y, fixedBonePos4.z);
-			D3DXVECTOR3 fixedParentPos(fixedParentPos4.x, fixedParentPos4.y, fixedParentPos4.z);
-
-
-			// Now project
-			D3DXVECTOR3 screenA, screenB;
-			if (HelperFunction::WorldToScreen(fixedBonePos, screenA, view, proj, viewport) &&
-				HelperFunction::WorldToScreen(fixedParentPos, screenB, view, proj, viewport))
+			if (visibleA && visibleB)
 			{
-				if (bones[i].selected) {
-					drawList->AddLine(
-						ImVec2(screenA.x + 350, screenA.y + 36),
-						ImVec2(screenB.x + 350, screenB.y + 36),
-						IM_COL32(255, 255, 0, 255), // red lines
-						2.0f // thickness
-					);
-
-					drawList->AddCircle(ImVec2(screenA.x + 350, screenA.y + 36), 4.0f, IM_COL32(255, 255, 0, 255));
+				if (bones[i].selected)
+				{
+					drawList->AddLine(ImVec2(screenA.x, screenA.y + 335), ImVec2(screenB.x, screenB.y + 335), IM_COL32(255, 255, 0, 255), 2.0f);
+					drawList->AddCircle(ImVec2(screenA.x, screenA.y + 335), 4.0f, IM_COL32(255, 255, 0, 255));
 				}
-				else {
-					drawList->AddLine(
-						ImVec2(screenA.x + 350, screenA.y + 36),
-						ImVec2(screenB.x + 350, screenB.y + 36),
-						IM_COL32(255, 0, 0, 255), // red lines
-						2.0f // thickness
-					);
+				else
+				{
+					if (visualizerShowBones) {
+						drawList->AddLine(ImVec2(screenA.x, screenA.y + 335), ImVec2(screenB.x, screenB.y + 335), IM_COL32(255, 0, 0, 255), 2.0f);
+					}
+					
 				}
-
 			}
-		}*/
+		}
 
+		ImVector<ImDrawList*> lists;
+		lists.push_back(drawList);
+		static ImDrawData drawData = ImDrawData();
+		drawData.DisplayPos = ImGui::GetMainViewport()->Pos;
+		drawData.DisplaySize = ImGui::GetMainViewport()->Size;
+		drawData.FramebufferScale = ImVec2(1.0f, 1.0f);
+		drawData.CmdLists = lists;
+		drawData.CmdListsCount = 1;
+		drawData.TotalIdxCount = drawList->IdxBuffer.size();
+		drawData.TotalVtxCount = drawList->VtxBuffer.size();
+		drawData.Valid = true;
+
+		ImGui_ImplOpenGL3_RenderDrawData(&drawData);
 	}
 
 

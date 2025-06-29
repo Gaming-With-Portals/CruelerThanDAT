@@ -16,6 +16,9 @@ public:
 	static void LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordered_map<unsigned int, unsigned int>& textureMap) {
 		bool isConsole = false;
 		WTB_EXDATA exData = EXDATA_NONE;
+		if (wta.GetSize() < 8) {
+			return;
+		}
 
 		wta.SetEndianess(false);
 		wtp.SetEndianess(false);
