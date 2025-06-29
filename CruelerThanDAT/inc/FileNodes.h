@@ -1715,7 +1715,7 @@ public:
 
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
-						cvtx.color = 0xFFFFFFFF; // white, RGBA as uint32
+						cvtx.color = 0xFFFFFFFF;
 						convertedVtx.push_back(cvtx);
 					}
 
@@ -1758,7 +1758,7 @@ public:
 						cvtx.tw = tangents.w;
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
-						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+						cvtx.color = 0xFFFFFFFF;
 						convertedVtx.push_back(cvtx);
 					}
 
@@ -1807,7 +1807,7 @@ public:
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
 						cvtx.u2 = HelperFunction::HalfToFloat(vertex.uv2.u);
 						cvtx.v2 = HelperFunction::HalfToFloat(vertex.uv2.v);
-						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+						cvtx.color = 0xFFFFFFFF;
 						convertedVtx.push_back(cvtx);
 					}
 
@@ -1853,7 +1853,7 @@ public:
 						cvtx.tw = tangents.w;
 						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
 						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
-						cvtx.color = D3DCOLOR_RGBA(255, 255, 255, 255);
+						cvtx.color = 0xFFFFFFFF;
 						convertedVtx.push_back(cvtx);
 					}
 
@@ -2783,7 +2783,7 @@ public:
 
 
 					if (type == 0x4) {
-						BnkEventObject evnObj{ type, size, uid };
+						BnkEventObject evnObj{ static_cast<uint8_t>(type), size, uid };
 						int eventCounts = reader.ReadUINT32();
 						for (int i = 0; i < eventCounts; i++) {
 							evnObj.ids.push_back(reader.ReadUINT32());

@@ -8,7 +8,7 @@
 #include <SDL3/SDL_main.h>
 
 #include <glad/glad.h>
-
+#include <glm/glm.hpp>
 
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
@@ -31,11 +31,8 @@ std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albed
 int TEXTURE_CAP = 512;
 
 ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
-static LPDIRECT3D9              g_pD3D = nullptr;
-static LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
 static bool                     g_DeviceLost = false;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
-static D3DPRESENT_PARAMETERS    g_d3dpp = {};
 static bool hasReset = false;
 unsigned int fbo, colorTex, depthRbo;
 int last_fbo_res_x, last_fbo_res_y;
@@ -44,26 +41,20 @@ static SDL_Window* window = nullptr;
 
 HWND hwnd;
 
-static LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
-static LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
-
 static int RES_X = 1600;
 static int RES_Y = 900;
 static float globalProgress = 0.0f;
 
-LPDIRECT3DTEXTURE9 g_RenderTargetTexture = nullptr;
-LPDIRECT3DSURFACE9 g_RenderTargetSurface = nullptr;
-
 // TODO: Delete
-static D3DXMATRIX projMatrix;
+static glm::mat4 projMatrix;
 
 float yaw = 0.0f;
 float pitch = 0.0f;
 float radius = 10.0f;
 
-D3DXVECTOR3 target = D3DXVECTOR3(0, 0, 0);
-D3DXVECTOR3 cameraPos;
-D3DXMATRIX view;
+glm::vec3 target = glm::vec3(0.f);
+glm::vec3 cameraPos = glm::vec3(0.f);
+glm::mat4 view = glm::mat4(1.f);
 
 static CTDSettings appConfig;
 
@@ -72,7 +63,7 @@ bool showViewport = true;
 
 std::string downloadURL = "";
 static std::unordered_map<unsigned int, unsigned int> textureMap;
-static LPDIRECT3DTEXTURE9 applicationIcon;
+//static LPDIRECT3DTEXTURE9 applicationIcon; // TODO: Replace by some GL or SDL thing
 static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 
 ThemeManager* themeManager;
@@ -230,15 +221,6 @@ void CreateFramebuffer(int res_x, int res_y) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-
-void CreateViewportRT(int width, int height)
-{
-	g_pd3dDevice->CreateTexture(width, height, 1, D3DUSAGE_RENDERTARGET,
-		D3DFMT_A32B32G32R32F, D3DPOOL_DEFAULT, &g_RenderTargetTexture, NULL);
-
-	g_RenderTargetTexture->GetSurfaceLevel(0, &g_RenderTargetSurface);
-}
-
 FileNode* FileNodeFromFilepath(std::string filePath) {
 	auto start = std::chrono::high_resolution_clock::now();
 	std::vector<char> fileData;
@@ -311,7 +293,6 @@ void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
 
 
 	for (unsigned int i = 0; i < textureCount; i++) {
-		LPDIRECT3DTEXTURE9 tmpTexture;
 		WTP.Seek(offsets[i]);
 		std::vector<char> data = WTP.ReadBytes(sizes[i]);
 		gli::texture tex = gli::load(data.data(), data.size());
@@ -529,7 +510,7 @@ void RenderFrame() {
 
 	//ImGui::Text("Textures Loaded: %zu/%d", textureMap.size(), TEXTURE_CAP);
 	
-	ImGui::Image((ImTextureID)(intptr_t)applicationIcon, ImVec2(16, 16));
+	ImGui::Image((ImTextureID)1, ImVec2(16, 16)); // TODO: Figure out what's the correct thing for this
 	ImGui::SameLine();
 	ImGui::SetCursorPosY(9);
 	ImGui::Text("CruelerThanDAT");
@@ -638,10 +619,7 @@ void RenderFrame() {
 
 	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
-	if (g_RenderTargetSurface == nullptr || g_RenderTargetTexture == nullptr) {
-		//CreateViewportRT(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
-	}
-	LPDIRECT3DSURFACE9 g_OriginalBackBuffer = nullptr;
+	//LPDIRECT3DSURFACE9 g_OriginalBackBuffer = nullptr;
 	//g_pd3dDevice->GetRenderTarget(0, &g_OriginalBackBuffer);
 	//g_pd3dDevice->SetRenderTarget(0, g_RenderTargetSurface);
 	//g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
@@ -875,35 +853,26 @@ void RenderFrame() {
 		}
 	}
 
-	D3DXMATRIX matRotateY;    // a matrix to store the rotation information
-
-
-	// build a matrix to rotate the model based on the increasing float value
-	D3DXMatrixRotationY(&matRotateY, D3DXToRadian(index));
-
 	// tell Direct3D about our matrix
 	//g_pd3dDevice->SetTransform(D3DTS_WORLD, &matRotateY);
 
-	D3DXMATRIX matView;    // the view transform matrix
-
-	pitch = std::max(-D3DX_PI * 0.49f, std::min(D3DX_PI * 0.49f, pitch));
+	
+	#define CRUEL_PI 3.14159265f // TODO: Move this somewhere that makes sense
+	pitch = std::max(-CRUEL_PI * 0.49f, std::min(CRUEL_PI * 0.49f, pitch));
 
 	float x = radius * cosf(pitch) * sinf(yaw);
 	float y = radius * sinf(pitch);
 	float z = radius * cosf(pitch) * cosf(yaw);
-	cameraPos = D3DXVECTOR3(x, y, z) + target;
+	cameraPos = glm::vec3(x, y, z) + target;
 
-	D3DXVECTOR3 up(0.0f, 1.0f, 0.0f);
-	D3DXMatrixLookAtLH(&view, &cameraPos, &target, &up);
+	glm::vec3 up(0.0f, 1.0f, 0.0f);
+	view = glm::lookAt(cameraPos, target, up);
 	//g_pd3dDevice->SetTransform(D3DTS_VIEW, &view);
 
-	D3DXMATRIX matProjection;     // the projection transform matrix
+	glm::mat4 matProjection = glm::perspective(glm::radians(fov),
+		static_cast<float>(size.x) / static_cast<float>(size.y),
+		.1f, 5000.f);
 
-	D3DXMatrixPerspectiveFovLH(&matProjection,
-		D3DXToRadian(fov),    // the horizontal field of view
-		(FLOAT)size.x / (FLOAT)size.y, // aspect ratio
-		1.0f,    // the near view-plane
-		5000.0f);    // the far view-plane
 
 	//g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &matProjection);
 
@@ -912,7 +881,7 @@ void RenderFrame() {
 
 
 	//g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-	//D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
+	//D3DCOLOR clear_col_dx = glm::vec4((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
 	//g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
 	//g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
 
