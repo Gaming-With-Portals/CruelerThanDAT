@@ -1,9 +1,4 @@
-local directx = os.getenv("DXSDK_DIR")
 local fbx = os.getenv("FBXSDK_DIR")
-
-if not directx then
-	error("DirectX 2010 SDK not found. To solve, install it if you haven't already, and then make sure DXSDK_DIR is set properly, if not, do it manually.")
-end
 
 if not fbx then
 	error("FBX SDK not found. Install it if you haven't already, and then set the FBXSDK_DIR variable to the path for it manually.")
@@ -55,7 +50,6 @@ workspace "CruelerThanDAT"
 			filter { "configurations:Debug" }
 				libdirs {
 					path.join(fbx,		"lib/x64/debug/"),
-					path.join(directx,	"Lib/x64/"),
 					"depends/SDL3/lib/x64/",
 					"build-curl/%{cfg.longname}/lib/",
 				}
@@ -70,7 +64,6 @@ workspace "CruelerThanDAT"
 			filter { "configurations:Release" }
 				libdirs {
 					path.join(fbx,		"lib/x64/release/"),
-					path.join(directx,	"Lib/x64/"),
 					"depends/SDL3/lib/x64/",
 					"build-curl/%{cfg.longname}/lib/",
 				}
@@ -110,7 +103,6 @@ workspace "CruelerThanDAT"
 			filter { "configurations:Debug" }
 				libdirs {
 					path.join(fbx,		"lib/x64/debug/"),
-					path.join(directx,	"Lib/x64/"),
 					"depends/SDL3/lib/x64/",
 					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 				}
@@ -126,7 +118,6 @@ workspace "CruelerThanDAT"
 			filter { "configurations:Release" }
 				libdirs {
 					path.join(fbx,		"lib/x64/release/"),
-					path.join(directx,	"Lib/x64/"),
 					"depends/SDL3/lib/x64/",
 					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 				}
@@ -168,7 +159,6 @@ workspace "CruelerThanDAT"
 		}
 
 		externalincludedirs {
-			path.join(directx,	"Include/"),
 			path.join(fbx,		"include/"),
 			"depends/GLAD/src",
 			"depends/curl/include/curl/",
@@ -200,8 +190,6 @@ workspace "CruelerThanDAT"
 				"comdlg32",
 				"ole32",
 				"SDL3",
-				"d3dx9d",
-				"d3d9",
 				"libfbxsdk",
 				"libcurl-d",
 			}
@@ -217,8 +205,6 @@ workspace "CruelerThanDAT"
 				"comdlg32",
 				"ole32",
 				"SDL3",
-				"d3dx9",
-				"d3d9",
 				"libfbxsdk",
 				"libcurl",
 			}
