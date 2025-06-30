@@ -1,6 +1,7 @@
 # Visual Studio project files
 *.sln
 *.vcxproj
+*.vcxproj.user
 *.vcxproj.filters
 
 # GNU Make files

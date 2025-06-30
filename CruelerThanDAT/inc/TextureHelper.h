@@ -11,6 +11,39 @@ enum WTB_EXDATA {
 	EXDATA_NONE
 };
 
+void unswizzle(uint8_t *dst, uint8_t *src, int32_t w, int32_t h, int32_t bpp)
+{
+	uint32_t maskU = 0;
+	uint32_t maskV = 0;
+	int32_t i = 1;
+	int32_t j = 1;
+	int32_t c;
+	do{
+		c = 0;
+		if(i < w){
+			maskU |= j;
+			j <<= 1;
+			c = j;
+		}
+		if(i < h){
+			maskV |= j;
+			j <<= 1;
+			c = j;
+		}
+		i <<= 1;
+	}while(c);
+	int32_t x, y, u, v;
+	v = 0;
+	for(y = 0; y < h; y++){
+		u = 0;
+		for(x = 0; x < w; x++){
+			memcpy(&dst[(y*w + x)*bpp], &src[(u|v)*bpp], bpp);
+			u = (u - maskU) & maskU;
+		}
+		v = (v - maskV) & maskV;
+	}
+}
+
 class TextureHelper {
 public:
 	static void LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordered_map<unsigned int, unsigned int>& textureMap) {
@@ -104,6 +137,18 @@ public:
 						return;
 					}
 
+					size_t blockCount = sizes[i] / 16;
+					for (size_t j = 0; j < blockCount; ++j) {
+						uint8_t *block = reinterpret_cast<uint8_t *>(&data[j * 16]);
+						std::swap(block[0], block[1]);
+						std::swap(block[8], block[9]);
+						std::swap(block[10], block[11]);
+					}
+					//std::vector<char> final_;
+					//final_.resize(sizes[i]);
+					//unswizzle((uint8_t *)final_.data(), (uint8_t *)data.data(), width, height,
+					//	(GL_COMPRESSED_RGBA_S3TC_DXT1_EXT == internalFormat) ? 8 : 16);
+
 					glCompressedTexImage2D(
 						GL_TEXTURE_2D,   
 						0,               
@@ -113,7 +158,10 @@ public:
 						sizes[i],  
 						data.data()              
 					);
-
+					GLenum err = glGetError();
+					if (0 != err) {
+						printf("GL error: %d\n", err);
+					}
 				}
 			}
 			if (glTextureID != 0) {

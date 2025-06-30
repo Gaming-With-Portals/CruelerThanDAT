@@ -26,55 +26,50 @@
 #include "CPKManager.h"
 #include <TextureHelper.h>
 
-
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
-int TEXTURE_CAP = 512;
+//int TEXTURE_CAP = 512;
 
-ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
-static bool                     g_DeviceLost = false;
-static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
-static bool hasReset = false;
-unsigned int fbo, colorTex, depthRbo;
-int last_fbo_res_x, last_fbo_res_y;
+//ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
+//static bool                     g_DeviceLost = false;
+//static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
+//static bool hasReset = false;
+//unsigned int ctx->viewportFrameBuffer, ctx->viewportColorTexture, ctx->viewportDepthRenderBuffer;
 
-static SDL_Window* window = nullptr;
+//static SDL_Window* ctx->window = nullptr;
 
-HWND hwnd;
-
-static int RES_X = 1600;
-static int RES_Y = 900;
-static float globalProgress = 0.0f;
+//static float globalProgress = 0.0f;
 
 // TODO: Delete
-static glm::mat4 projMatrix;
+//static glm::mat4 projMatrix;
 
-float yaw = 0.0f;
-float pitch = 0.0f;
-float radius = 10.0f;
+//float ctx->yaw = 0.0f;
+//float ctx->pitch = 0.0f;
+//float ctx->radius = 10.0f;
 
-glm::vec3 target = glm::vec3(0.f);
-glm::vec3 cameraPos = glm::vec3(0.f);
-glm::mat4 view = glm::mat4(1.f);
+//glm::vec3 ctx->target = glm::vec3(0.f);
+//glm::vec3 ctx->cameraPos = glm::vec3(0.f);
+//glm::mat4 ctx->viewMatrix = glm::mat4(1.f);
 
-static CTDSettings appConfig;
+//static CTDSettings ctx->config;
 
-bool hasHandledArguments = false;
-bool showViewport = true;
+//bool ctx->hasHandledArguments = false;
+//bool ctx->viewportShow = true;
 
-std::string downloadURL = "";
-static std::unordered_map<unsigned int, unsigned int> textureMap;
+//std::string ctx->downloadURL = "";
+//static std::unordered_map<unsigned int, unsigned int> ctx->textureMap;
 //static LPDIRECT3DTEXTURE9 applicationIcon; // TODO: Replace by some GL or SDL thing
-static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
+//static std::unordered_map<unsigned int, std::vector<char>> ctx->rawTextureInfo;
 
-ThemeManager* themeManager;
-CPKManager* cpkManager;
+//ThemeManager* ctx->themeManager;
+//CPKManager* ctx->cpkManager;
 
-bool dragging = false;
-int drag_offset_x = 0;
-int drag_offset_y = 0;
+//bool ctx->dragging = false;
+//int ctx->dragOffsetX = 0;
+//int ctx->dragOffsetY = 0;
 
-bool showAllSCRMeshes = false;
-bool cruelerLog = true;
+//bool ctx->showAllScrMeshes = false;
+//bool ctx->cruelerLog = true;
+std::vector<FileNode*> openFiles;
 
 namespace HelperFunction {
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess, bool bigEndian) {
@@ -198,24 +193,24 @@ namespace HelperFunction {
 	}
 }
 
-void CreateFramebuffer(int res_x, int res_y) {
-	last_fbo_res_x = res_x;
-	last_fbo_res_y = res_y;
+void CreateFramebuffer(CruelerContext *ctx, int res_x, int res_y) {
+	ctx->viewportLastSize.x = res_x;
+	ctx->viewportLastSize.y = res_y;
 
-	glGenFramebuffers(1, &fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glGenFramebuffers(1, &ctx->viewportFrameBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, ctx->viewportFrameBuffer);
 
-	glGenTextures(1, &colorTex);
-	glBindTexture(GL_TEXTURE_2D, colorTex);
+	glGenTextures(1, &ctx->viewportColorTexture);
+	glBindTexture(GL_TEXTURE_2D, ctx->viewportColorTexture);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, res_x, res_y, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->viewportColorTexture, 0);
 
-	glGenRenderbuffers(1, &depthRbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, depthRbo);
+	glGenRenderbuffers(1, &ctx->viewportDepthRenderBuffer);
+	glBindRenderbuffer(GL_RENDERBUFFER, ctx->viewportDepthRenderBuffer);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, res_x, res_y);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthRbo);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ctx->viewportDepthRenderBuffer);
 
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -260,7 +255,7 @@ std::string getDTTPath(const std::string& originalPath) {
 	return "";
 }
 
-void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
+void DX9WTAWTPLoad(CruelerContext *ctx, BinaryReader& WTA, BinaryReader& WTP) {
 	if (WTA.GetSize() < 28 || WTP.GetSize() <= 0) {
 		return;
 	}
@@ -316,8 +311,8 @@ void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
 
 			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 			glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			rawTextureInfo[idx[i]] = data;
-			textureMap[idx[i]] = textureID;
+			ctx->rawTextureInfo[idx[i]] = data;
+			ctx->textureMap[idx[i]] = textureID;
 		}
 
 	}
@@ -325,7 +320,7 @@ void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
 }
 
 
-void PopulateTextures() {
+void PopulateTextures(CruelerContext *ctx) {
 	// keep track of variables: challenge level impossible
 	for (FileNode* node : openFiles) {
 		if (fs::exists(getDTTPath(node->fileName))) {
@@ -346,7 +341,7 @@ void PopulateTextures() {
 						BinaryReader wtp = BinaryReader(wtpFile->fileData);
 						wta.SetEndianess(node->fileIsBigEndian);
 
-						TextureHelper::LoadData(wta, wtp, textureMap);
+						TextureHelper::LoadData(wta, wtp, ctx->textureMap);
 						return;
 					}
 
@@ -356,7 +351,7 @@ void PopulateTextures() {
 					BinaryReader wtp = BinaryReader(dtnode->fileData);
 					wta.SetEndianess(node->fileIsBigEndian);
 
-					TextureHelper::LoadData(wta, wtp, textureMap);
+					TextureHelper::LoadData(wta, wtp, ctx->textureMap);
 					return;
 				}
 			}
@@ -376,7 +371,7 @@ void PopulateTextures() {
 						BinaryReader wtp = BinaryReader(wtpFile->fileData);
 						wta.SetEndianess(node->fileIsBigEndian);
 
-						TextureHelper::LoadData(wta, wtp, textureMap);
+						TextureHelper::LoadData(wta, wtp, ctx->textureMap);
 
 						printf("Loading textures...");
 						return;
@@ -388,7 +383,7 @@ void PopulateTextures() {
 					BinaryReader wtp = BinaryReader(dtnode->fileData);
 					wta.SetEndianess(node->fileIsBigEndian);
 
-					TextureHelper::LoadData(wta, wtp, textureMap);
+					TextureHelper::LoadData(wta, wtp, ctx->textureMap);
 					return;
 				}
 			}
@@ -409,7 +404,7 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
 	return size * nmemb;
 }
 
-void SelfUpdate() {
+void SelfUpdate(CruelerContext *ctx) {
 	CURL* curl = curl_easy_init();
 	std::string response;
 
@@ -433,8 +428,8 @@ void SelfUpdate() {
 		int newBuild = std::stoi(numberPart);
 		if (newBuild > BUILD_NUMBER) {
 			CTDLog::Log::getInstance().LogUpdate();
-			downloadURL = data["assets"][0]["browser_download_url"];
-			if (downloadURL != "") {
+			ctx->downloadURL = data["assets"][0]["browser_download_url"];
+			if (ctx->downloadURL != "") {
 				SHOULD_UPDATE = true;
 			}
 
@@ -447,32 +442,10 @@ void SelfUpdate() {
 
 }
 
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
-{
-	if (event->type == SDL_EVENT_QUIT) {
-		return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
-	}
-	return SDL_APP_CONTINUE;  /* carry on with the program! */
-}
-
-SDL_AppResult SDL_AppIterate(void* appstate)
-{
-
-	return SDL_APP_CONTINUE;
-}
-
-void SDL_AppQuit(void* appstate, SDL_AppResult result)
-{
-
-}
-
-void RenderFrame() {
-
-
-
+void RenderFrame(CruelerContext *ctx) {
 	static float fov = 50.0f;
 	static float index = 180.0f;
-	//static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
+	//static float ctx->cameraPos[3] = { 0.0f, 0.0f, -15.0f };
 	static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
 	(void)cameraVec;
 	static bool spinModel = false;
@@ -481,13 +454,13 @@ void RenderFrame() {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
-	glViewport(0, 0, (int)RES_X, (int)RES_Y);
+	glViewport(0, 0, (int)ctx->winSize.x, (int)ctx->winSize.y);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X), 26));
+	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x), 26));
 
 	ImGui::Begin("TabCtrl", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
 
@@ -495,7 +468,7 @@ void RenderFrame() {
 
 		if (ImGui::Button("Update")) {
 			SHOULD_UPDATE = false;
-			URLDownloadToFileA(NULL, downloadURL.c_str(), "update.zip", NULL, NULL);
+			URLDownloadToFileA(NULL, ctx->downloadURL.c_str(), "update.zip", NULL, NULL);
 			ShellExecute(NULL, L"open", L"update.bat", NULL, NULL, SW_SHOWNORMAL);
 			exit(0);
 
@@ -505,10 +478,10 @@ void RenderFrame() {
 
 	if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
 		ReleaseCapture();
-		PostMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+		//PostMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
 	}
 
-	//ImGui::Text("Textures Loaded: %zu/%d", textureMap.size(), TEXTURE_CAP);
+	//ImGui::Text("Textures Loaded: %zu/%d", ctx->textureMap.size(), TEXTURE_CAP);
 	
 	ImGui::Image((ImTextureID)1, ImVec2(16, 16)); // TODO: Figure out what's the correct thing for this
 	ImGui::SameLine();
@@ -519,7 +492,7 @@ void RenderFrame() {
 	ImGui::SetCursorPosY(-1);
 	ImGui::SetCursorPosX(0);
 
-	ImGui::ProgressBar(globalProgress, ImVec2(static_cast<float>(RES_X), 4.0f), "");
+	ImGui::ProgressBar(ctx->progress, ImVec2(static_cast<float>(ctx->winSize.x), 4.0f), "");
 
 	float spacing = 4.0f;
 	float btnW = 36.0f;
@@ -539,7 +512,7 @@ void RenderFrame() {
 	ImGui::End();
 	
 	ImGui::SetNextWindowPos(ImVec2(0, 36));
-	ImGui::SetNextWindowSize(ImVec2(350, static_cast<float>(RES_Y) - 36));
+	ImGui::SetNextWindowSize(ImVec2(350, static_cast<float>(ctx->winSize.y) - 36));
 
 	ImGui::Begin("DatView", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
 
@@ -553,36 +526,36 @@ void RenderFrame() {
 
 
 			for (FileNode* node : openFiles) {
-				node->Render();
+				node->Render(ctx);
 			}
 
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("CPK Viewer")) {
 
-			cpkManager->Render();
+			ctx->cpkManager->Render(ctx);
 
 
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Configuration")) {
 			if (ImGui::Button("SAVE")) {
-				appConfig.Write();
+				ctx->config.Write();
 			}
 
 			ImGui::Text("WMB/SCR");
-			ImGui::Checkbox("Automatically Load Textures", &appConfig.AutomaticallyLoadTextures);
-			ImGui::Checkbox("Show All SCR Meshes By Default", &appConfig.ShowAllMeshesByDefault);
+			ImGui::Checkbox("Automatically Load Textures", &ctx->config.AutomaticallyLoadTextures);
+			ImGui::Checkbox("Show All SCR Meshes By Default", &ctx->config.ShowAllMeshesByDefault);
 
 			ImGui::Text("Theme");
 			if (ImGui::Button("ImGui Theme")) {
-				themeManager->ChooseStyle(0);
+				ctx->themeManager->ChooseStyle(0);
 			}
 			if (ImGui::Button("Visual Studio Theme")) {
-				themeManager->ChooseStyle(1);
+				ctx->themeManager->ChooseStyle(1);
 			}
 			if (ImGui::Button("Half Life Theme")) {
-				themeManager->ChooseStyle(2);
+				ctx->themeManager->ChooseStyle(2);
 			}
 
 			ImGui::EndTabItem();
@@ -601,16 +574,16 @@ void RenderFrame() {
 
 	ImGui::SetNextWindowPos(ImVec2(350, 36));
 	int window_height = 0;
-	if (cruelerLog) {
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X) - 350, static_cast<float>(RES_Y) - 335));
-		window_height = RES_Y - 335;
+	if (ctx->cruelerLog) {
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x) - 350, static_cast<float>(ctx->winSize.y) - 335));
+		window_height = ctx->winSize.y - 335;
 	}
 	else {
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X) - 350, static_cast<float>(RES_Y) - 75));
-		window_height = RES_Y - 80;
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x) - 350, static_cast<float>(ctx->winSize.y) - 75));
+		window_height = ctx->winSize.y - 80;
 	}
 
-	if (showViewport == false) {
+	if (ctx->viewportShow == false) {
 		ImGui::SetNextWindowBgAlpha(0.1f);
 	}
 	else {
@@ -627,15 +600,15 @@ void RenderFrame() {
 
 	if (FileNode::selectedNode) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
-			showViewport = true;
+			ctx->viewportShow = true;
 			BxmFileNode* bxmNode = ((BxmFileNode*)FileNode::selectedNode);
-			bxmNode->RenderGUI();
+			bxmNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WTB) {
-			showViewport = true;
+			ctx->viewportShow = true;
 			ImGui::Text("- Textures");
 			WtbFileNode* wtbNode = ((WtbFileNode*)FileNode::selectedNode);
-			if (ImGui::BeginListBox("##texturebox", ImVec2{ (float)RES_X - 350.0f, (float)window_height })) {
+			if (ImGui::BeginListBox("##texturebox", ImVec2{ (float)ctx->winSize.x - 350.0f, (float)window_height })) {
 				for (int x = 0; x < wtbNode->textureCount; x++) {
 
 					ImGui::Text("ID: %i", wtbNode->textureIdx[x]);
@@ -648,27 +621,27 @@ void RenderFrame() {
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::LY2) {
 			LY2FileNode* ly2Node = ((LY2FileNode*)FileNode::selectedNode);
-			ly2Node->RenderGUI();
+			ly2Node->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::UID) {
 			UidFileNode* uidNode = ((UidFileNode*)FileNode::selectedNode);
-			uidNode->RenderGUI();
+			uidNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::UVD) {
 			UvdFileNode* uvdNode = ((UvdFileNode*)FileNode::selectedNode);
-			uvdNode->RenderGUI();
+			uvdNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::BNK) {
 			BnkFileNode* bnkNode = ((BnkFileNode*)FileNode::selectedNode);
-			bnkNode->RenderGUI();
+			bnkNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
-			showViewport = false;
+			ctx->viewportShow = false;
 			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
 
 			if (ImGui::BeginTabBar("wmb_editor")) {
 				if (ImGui::BeginTabItem("Meshes")) {
-					wmbNode->RenderGUI();
+					wmbNode->RenderGUI(ctx);
 					ImGui::EndTabItem();
 				}
 
@@ -677,7 +650,7 @@ void RenderFrame() {
 					ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
 					if (ImGui::Button("Fetch Textures")) {
 
-						PopulateTextures();
+						PopulateTextures(ctx);
 					}
 
 
@@ -721,7 +694,7 @@ void RenderFrame() {
 
 				if (wmbNode->isSCR) {
 					if (ImGui::BeginTabItem("SCR Options")) {
-						ImGui::Checkbox("Show All SCR Meshes", &showAllSCRMeshes);
+						ImGui::Checkbox("Show All SCR Meshes", &ctx->showAllScrMeshes);
 
 						ImGui::EndTabItem();
 					}
@@ -746,12 +719,12 @@ void RenderFrame() {
 	ImVec2 pos = ImGui::GetWindowPos();
 	ImVec2 size = ImGui::GetWindowSize();
 	ImGui::GetBackgroundDrawList()->AddImage(
-		(ImTextureID)(uintptr_t)colorTex, pos, ImVec2(pos.x + size.x, pos.y + size.y), ImVec2(0, 1), ImVec2(1, 0));
-	if (last_fbo_res_x != size.x || last_fbo_res_y != size.y) {
-		glDeleteTextures(1, &colorTex);
-		glDeleteRenderbuffers(1, &depthRbo);
-		glDeleteFramebuffers(1, &fbo);
-		CreateFramebuffer(size.x, size.y);
+		(ImTextureID)(uintptr_t)ctx->viewportColorTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y), ImVec2(0, 1), ImVec2(1, 0));
+	if (ctx->viewportLastSize.x != size.x || ctx->viewportLastSize.y != size.y) {
+		glDeleteTextures(1, &ctx->viewportColorTexture);
+		glDeleteRenderbuffers(1, &ctx->viewportDepthRenderBuffer);
+		glDeleteFramebuffers(1, &ctx->viewportFrameBuffer);
+		CreateFramebuffer(ctx, size.x, size.y);
 		CameraManager::Instance().SetWindowSize(size.x, size.y);
 		CameraManager::Instance().SetWindowPos(pos.x, pos.y);
 	}
@@ -760,18 +733,18 @@ void RenderFrame() {
 
 
 
-	if (cruelerLog) {
+	if (ctx->cruelerLog) {
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 
-		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(RES_Y) - 300));
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X) - 350, 300));
+		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(ctx->winSize.y) - 300));
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x) - 350, 300));
 		ImGui::Begin("CruelerThanDAT Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
 		if (ImGui::Button(ICON_CI_TERMINAL, ImVec2(25, 25))) {
-			cruelerLog = false;
+			ctx->cruelerLog = false;
 		}
 		ImGui::SameLine();
 
@@ -797,11 +770,11 @@ void RenderFrame() {
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
-		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(RES_Y) - 40));
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(RES_X) - 350, 40));
+		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(ctx->winSize.y) - 40));
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x) - 350, 40));
 		ImGui::Begin("CruelerThanDAT Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
 		if (ImGui::Button(ICON_CI_TERMINAL, ImVec2(25, 25))) {
-			cruelerLog = true;
+			ctx->cruelerLog = true;
 		}
 		ImGui::SameLine();
 		ImGui::Text("CruelerThanDAT Log");
@@ -826,16 +799,16 @@ void RenderFrame() {
 
 	
 	#define CRUEL_PI 3.14159265f // TODO: Move this somewhere that makes sense
-	pitch = std::max(-CRUEL_PI * 0.49f, std::min(CRUEL_PI * 0.49f, pitch));
+	ctx->pitch = std::max(-CRUEL_PI * 0.49f, std::min(CRUEL_PI * 0.49f, ctx->pitch));
 
-	float x = radius * cosf(pitch) * sinf(yaw);
-	float y = radius * sinf(pitch);
-	float z = radius * cosf(pitch) * cosf(yaw);
-	cameraPos = glm::vec3(x, y, z) + target;
+	float x = ctx->radius * cosf(ctx->pitch) * sinf(ctx->yaw);
+	float y = ctx->radius * sinf(ctx->pitch);
+	float z = ctx->radius * cosf(ctx->pitch) * cosf(ctx->yaw);
+	ctx->cameraPos = glm::vec3(x, y, z) + ctx->target;
 
 	glm::vec3 up(0.0f, 1.0f, 0.0f);
-	view = glm::lookAt(cameraPos, target, up);
-	//g_pd3dDevice->SetTransform(D3DTS_VIEW, &view);
+	ctx->viewMatrix = glm::lookAt(ctx->cameraPos, ctx->target, up);
+	//g_pd3dDevice->SetTransform(D3DTS_VIEW, &ctx->viewMatrix);
 
 	glm::mat4 matProjection = glm::perspective(glm::radians(fov),
 		static_cast<float>(size.x) / static_cast<float>(size.y),
@@ -859,8 +832,8 @@ void RenderFrame() {
 	//	D3DCOLORWRITEENABLE_BLUE);
 
 	const float pointSize = 5.0f;
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glViewport(0, 0, last_fbo_res_x, last_fbo_res_y);
+	glBindFramebuffer(GL_FRAMEBUFFER, ctx->viewportFrameBuffer);
+	glViewport(0, 0, ctx->viewportLastSize.x, ctx->viewportLastSize.y);
 	glEnable(GL_DEPTH_TEST);
 
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -868,18 +841,18 @@ void RenderFrame() {
 
 	if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
 		WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
-		//g_pd3dDevice->SetTexture(0, textureMap[0]);
+		//g_pd3dDevice->SetTexture(0, ctx->textureMap[0]);
 
-		if (showAllSCRMeshes && wmbNode->isSCR) {
+		if (ctx->showAllScrMeshes && wmbNode->isSCR) {
 			ScrFileNode* scrNode = (ScrFileNode*)wmbNode->scrNode;
 			for (FileNode* child : scrNode->children) {
 				WmbFileNode* scrChildNode = (WmbFileNode*)child;
-				scrChildNode->RenderMesh();
+				scrChildNode->RenderMesh(ctx);
 			}
 
 		}
 		else {
-			wmbNode->RenderMesh();
+			wmbNode->RenderMesh(ctx);
 		}
 
 
@@ -891,15 +864,21 @@ void RenderFrame() {
 	ImGui::Render();
 
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	SDL_GL_SwapWindow(window);
+	SDL_GL_SwapWindow(ctx->window);
 
 
 
 }
 
+SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
+	auto ctx = new CruelerContext{
+		.args = std::vector<std::string>(argv, argv + argc),
+		.viewportShow = true,
+		.projMatrix = glm::mat4(1.f),
+		.viewMatrix = glm::mat4(1.f),
+		.cruelerLog = true,
+	};
 
-SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
-{
 	printf("-- CruelerThanDAT --\n");
 
 	printf("Setting working directory...\n");
@@ -931,17 +910,17 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 		std::cin.get();
 	}
 
-	themeManager = new ThemeManager();
-	themeManager->UpdateThemeList();
+	ctx->themeManager = new ThemeManager();
+	ctx->themeManager->UpdateThemeList();
 
 
-	appConfig.Read();
+	ctx->config.Read();
 
 
-	cpkManager = new CPKManager();
-	cpkManager->Init("");
+	ctx->cpkManager = new CPKManager();
+	ctx->cpkManager->Init("");
 
-	printf("D3DInit...");
+	printf("D3DInit...\n");
 	CTDLog::Log::getInstance().LogNote("Launching CruelerThanDAT...");
 	CTDLog::Log::getInstance().LogNote("Waiting for OpenGL...");
 
@@ -951,11 +930,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-	window = SDL_CreateWindow("CruelerThanDAT",
-		RES_X, RES_Y, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS);
+	// TODO: Resizing is not handled by the OS for borderless windows, we have to do it
+	//       manually via hit test callbacks or ditch server side decorations entirely.
+	ctx->window = SDL_CreateWindow("CruelerThanDAT",
+		ctx->winSize.x, ctx->winSize.y, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED);// | SDL_WINDOW_BORDERLESS);
 
-	SDL_GLContext context = SDL_GL_CreateContext(window);
-	SDL_GL_MakeCurrent(window, context);
+	SDL_GLContext context = SDL_GL_CreateContext(ctx->window);
+	SDL_GL_MakeCurrent(ctx->window, context);
 	SDL_GL_SetSwapInterval(1);
 
 	if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
@@ -972,7 +953,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
 
-	ImGui_ImplSDL3_InitForOpenGL(window, context);
+	ImGui_ImplSDL3_InitForOpenGL(ctx->window, context);
 	ImGui_ImplOpenGL3_Init("#version 330 core");
 
 	// Load Fonts
@@ -999,12 +980,12 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 
 
 
-	themeManager->ChooseStyle(1);
+	ctx->themeManager->ChooseStyle(1);
 	ImGui::GetStyle().WindowMinSize = ImVec2(32, 32);
 
 
-	if (appConfig.ShowAllMeshesByDefault) {
-		showAllSCRMeshes = true;
+	if (ctx->config.ShowAllMeshesByDefault) {
+		ctx->showAllScrMeshes = true;
 	}
 
 	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
@@ -1012,79 +993,92 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 
 	CTDLog::Log::getInstance().LogNote("CruelerThanDAT Ready");
 
-	SelfUpdate();
-	CreateFramebuffer(32, 32);
-	bool done = false;
-	while (!done)
-	{
-		SDL_Event event;
-		while (SDL_PollEvent(&event)) {
-			ImGui_ImplSDL3_ProcessEvent(&event);
-			if (event.type == SDL_EVENT_QUIT)
-				done = true;
-			switch (event.type) {
-				case SDL_EVENT_DROP_FILE:
-				{
-					std::string droppedPath = event.drop.data;
-					openFiles.push_back(FileNodeFromFilepath(droppedPath));
-					if (appConfig.AutomaticallyLoadTextures) {
-						PopulateTextures();
-					}
-					break;
-				}
-				case SDL_EVENT_MOUSE_BUTTON_DOWN:
-					if (event.button.button == SDL_BUTTON_LEFT) {
-						int x = event.button.x;
-						int y = event.button.y;
+	SelfUpdate(ctx);
+	CreateFramebuffer(ctx, 32, 32);
 
-						if (y >= 0 && y <= 30) {
-							dragging = true;
+	appstate[0] = reinterpret_cast<void *>(ctx);
+	return SDL_APP_CONTINUE;
+}
 
-							int win_x, win_y;
-							SDL_GetWindowPosition(window, &win_x, &win_y);
-							drag_offset_x = x;
-							drag_offset_y = y;
-						}
-					}
-					break;
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+	auto ctx = reinterpret_cast<CruelerContext *>(appstate);
 
-				case SDL_EVENT_MOUSE_BUTTON_UP:
-					if (event.button.button == SDL_BUTTON_LEFT) {
-						dragging = false;
-					}
-					break;
+	ImGui_ImplSDL3_ProcessEvent(event);
 
-				case SDL_EVENT_MOUSE_MOTION:
-					if (dragging) {
-						float global_x = event.motion.x;
-						float global_y = event.motion.y;
+	switch (event->type) {
+		case SDL_EVENT_QUIT: {
+			return SDL_APP_SUCCESS;
+		} break;
 
-						int win_x, win_y;
-						SDL_GetGlobalMouseState(&global_x, &global_y); 
-						SDL_SetWindowPosition(window, global_x - drag_offset_x, global_y - drag_offset_y);
-					}
-					break;
+		case SDL_EVENT_WINDOW_RESIZED: {
+			SDL_WindowEvent wine = event->window;
+			ctx->winSize.x = wine.data1;
+			ctx->winSize.y = wine.data2;
+		} break;
+
+		case SDL_EVENT_DROP_FILE: {
+			std::string droppedPath = event->drop.data;
+			openFiles.push_back(FileNodeFromFilepath(droppedPath));
+			if (ctx->config.AutomaticallyLoadTextures) {
+				PopulateTextures(ctx);
 			}
+		} break;
 
-			CameraManager::Instance().Input(&event);
+		case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+			if (event->button.button == SDL_BUTTON_LEFT) {
+				int x = event->button.x;
+				int y = event->button.y;
 
-		}
-		if (done)
-			break;
+				if (y >= 0 && y <= 30) {
+					ctx->dragging = true;
 
-		RenderFrame();
-
-		if (!hasHandledArguments) {
-			for (int i = 1; i < argc; ++i) {
-				if (std::filesystem::exists(argv[i])) {
-					openFiles.push_back(FileNodeFromFilepath(argv[i]));
-
+					int win_x, win_y;
+					SDL_GetWindowPosition(ctx->window, &win_x, &win_y);
+					ctx->dragOffsetX = x;
+					ctx->dragOffsetY = y;
 				}
 			}
-			hasHandledArguments = true;
-		}
+		} break;
+		
+		case SDL_EVENT_MOUSE_BUTTON_UP: {
+			if (event->button.button == SDL_BUTTON_LEFT) {
+				ctx->dragging = false;
+			}
+		} break;
+		
+		case SDL_EVENT_MOUSE_MOTION: {
+			if (ctx->dragging) {
+				float global_x = event->motion.x;
+				float global_y = event->motion.y;
 
+				int win_x, win_y;
+				SDL_GetGlobalMouseState(&global_x, &global_y); 
+				SDL_SetWindowPosition(ctx->window, global_x - ctx->dragOffsetX, global_y - ctx->dragOffsetY);
+			}
+		} break;
+	}
+
+	CameraManager::Instance().Input(event);
+	return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult SDL_AppIterate(void* appstate) {
+	auto ctx = reinterpret_cast<CruelerContext *>(appstate);
+
+	RenderFrame(ctx);
+
+	if (!ctx->hasHandledArguments) {
+		for (int i = 1; i < ctx->args.size(); ++i) {
+			if (std::filesystem::exists(ctx->args[i])) {
+				openFiles.push_back(FileNodeFromFilepath(ctx->args[i]));
+			}
+		}
+		ctx->hasHandledArguments = true;
 	}
 	return SDL_APP_CONTINUE;
 }
 
+void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+	auto ctx = reinterpret_cast<CruelerContext *>(appstate);
+	delete ctx;
+}
