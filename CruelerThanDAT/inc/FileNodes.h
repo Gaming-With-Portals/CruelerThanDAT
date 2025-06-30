@@ -5,6 +5,7 @@
 #include "CTDSettings.h"
 #include "globals.h"
 #include "tinyxml2.h"
+#include "imgui_impl_opengl3.h"
 #include "BinaryHandler.h"
 #include "CodIcons.h"
 #include "Log.h"
@@ -98,6 +99,7 @@ namespace BXMInternal {
 void closeNode(FileNode* target);
 
 namespace HelperFunction {
+	bool WorldToScreen(const glm::vec3& worldPos, glm::vec2& screenPos, const glm::mat4& view, const glm::mat4& proj, const GLint* viewport);
 
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess = false, bool bigEndian = false);
 
@@ -338,7 +340,7 @@ struct CruelerBone {
 	glm::vec3 worldPosition;
 	glm::mat4 localTransform;
 	glm::mat4 combinedTransform;
-	glm::mat4 offsetMatrix; 
+	glm::mat4 offsetMatrix;
 };
 
 class CruelerBatch {
@@ -384,6 +386,9 @@ public:
 	bool isSCR = false;
 	float rotationAngle = 0;;
 	float scaleFactor = 0.4f;
+	bool visualizerPopout = false;
+	bool visualizerShowBones = false;
+	bool visualizerWireframe = false;
 
 	WmbFileNode(std::string fName);
 
