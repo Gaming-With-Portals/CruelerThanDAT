@@ -149,18 +149,18 @@ void CPKManager::MakeTree(const fs::path& dirPath, CPKMGMTFile& node) {
 	}
 }
 
-void CPKManager::RenderTree(const CPKMGMTFile& file) {
+void CPKManager::RenderTree(const CruelerContext *ctx, const CPKMGMTFile& file) {
 	if (file.type == 1) {
 		if (ImGui::TreeNode(file.name.c_str())) {
 			for (const auto& child : file.children) {
-				RenderTree(child);
+				RenderTree(ctx, child);
 			}
 			ImGui::TreePop();
 		}
 	}
 	else if (file.type == 8) {
 		for (const auto& child : file.children) {
-			RenderTree(child);
+			RenderTree(ctx, child);
 		}
 	}
 	else {
@@ -481,7 +481,18 @@ void CPKManager::DrawSubitems(CruelerContext *ctx, const CRIFOLDER& folder, cons
 
 	for (const auto& file : folder.files) {
 		if (searchQuery.empty() || file.name.find(searchQuery) != std::string::npos) {
-			if (ImGui::TreeNodeEx(file.name.c_str(), ImGuiTreeNodeFlags_Leaf)) {
+
+			size_t pos = file.name.rfind('.');
+			std::string name = (std::string::npos != pos) ?
+				file.name.substr(0, pos) : file.name;
+			
+			std::stringstream ss;
+			ss << file.name;
+			if (ctx->plNames.contains(name)) {
+				printf("\n%s\n", name);
+				ss << " (" << ctx->plNames[name].get<std::string>() << ")";
+			}
+			if (ImGui::TreeNodeEx(ss.str().c_str(), ImGuiTreeNodeFlags_Leaf)) {
 				if (ImGui::IsItemClicked()) {
 					isCPKLoaded = false;
 					activeFile.type = 9;
@@ -606,7 +617,7 @@ void CPKManager::Render(CruelerContext *ctx) {
 		}
 
 
-		RenderTree(baseFile);
+		RenderTree(ctx, baseFile);
 	}
 	else {
 		ImGui::SeparatorText(activeFile.name.c_str());

@@ -6,13 +6,11 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-
 #include <glad/glad.h>
 #include <glm/glm.hpp>
-
+#include <gli/gli.hpp>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
-#include "gli/gli.hpp"
 
 #include "CruelerThanDAT.h"
 #include "globals.h"
@@ -862,14 +860,17 @@ void RenderFrame(CruelerContext *ctx) {
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
+	std::ifstream pldb("Assets/pl.json");
 	auto ctx = new CruelerContext{
 		.args = std::vector<std::string>(argv, argv + argc),
 		.winSize = SCREEN_RESOLUTION,
 		.viewportShow = true,
 		.projMatrix = glm::mat4(1.f),
 		.viewMatrix = glm::mat4(1.f),
+		.plNames = nlohmann::json::parse(pldb),
 		.cruelerLog = true,
 	};
+	pldb.close();
 
 	printf("-- CruelerThanDAT --\n");
 

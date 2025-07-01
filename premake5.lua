@@ -160,15 +160,16 @@ workspace "CruelerThanDAT"
 
 		externalincludedirs {
 			path.join(fbx,		"include/"),
-			"depends/GLAD/src",
+			"depends/GLAD/src/",
 			"depends/curl/include/curl/",
 			"depends/SDL3/include",
 			"depends/imgui/inc/",
 			"depends/imstb/",
 			"depends/json/",
-			"depends/GLAD/include",
-			"depends/gli",
-			"depends/glm",
+			"depends/GLAD/include/",
+			"depends/gli/",
+			"depends/glm/",
+			"depends/ddpss/",
 		}
 
 		filter { "toolset:clang" }
