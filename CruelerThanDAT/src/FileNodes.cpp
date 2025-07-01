@@ -1372,6 +1372,16 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 	}
 
+	void WmbFileNode::LoadModelWMB0(BinaryReader& reader)
+	{
+		/*reader.ReadUINT32();
+		reader.ReadUINT32();
+		uint32_t vertexFormat = reader.ReadUINT32();
+		uint32_t numVertexes = reader.ReadUINT32();
+		uint8_t numMapping = reader.ReadINT8();
+		uint8_t numColor = reader.ReadINT8();*/
+	}
+
 	void WmbFileNode::LoadModelWMB3(BinaryReader& reader)
 	{
 		struct WMB3Header {
@@ -1633,42 +1643,48 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
 				glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
-				reader.Seek(activeVtxGroup.vertexOffset + activeBatch.vertexStart * 28);
-				ctdmesh->structSize = sizeof(CUSTOMVERTEX);
+				if (activeVtxGroup.vertexFlags == 0x8) {
+					reader.Seek(activeVtxGroup.vertexOffset + activeBatch.vertexStart * 28);
+					ctdmesh->structSize = sizeof(CUSTOMVERTEX);
 
-				std::vector<WMB3Vertex> vertexes;
-				for (uint32_t i = 0; i < activeBatch.numVertexes; i++) {
-					WMB3Vertex vtx;
-					vtx.Read(reader);
-					vertexes.push_back(vtx);
+					std::vector<WMB3Vertex> vertexes;
+					for (uint32_t i = 0; i < activeBatch.numVertexes; i++) {
+						WMB3Vertex vtx;
+						vtx.Read(reader);
+						vertexes.push_back(vtx);
+					}
+
+					std::vector<CUSTOMVERTEX> convertedVtx;
+					for (WMB3Vertex& vertex : vertexes) {
+						CUSTOMVERTEX cvtx;
+						cvtx.x = vertex.position.x;
+						cvtx.y = vertex.position.y;
+						cvtx.z = vertex.position.z;
+
+						glm::vec4 tangents = HelperFunction::DecodeTangent(vertex.tangents);
+						cvtx.tx = tangents.x;
+						cvtx.ty = tangents.y;
+						cvtx.tz = tangents.z;
+						cvtx.tw = tangents.w;
+
+						cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
+						cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
+						cvtx.color = 0xFFFFFFFF;
+						convertedVtx.push_back(cvtx);
+					}
+
+					if (ctdbatch->vertexBuffer == 0)
+						glGenBuffers(1, &ctdbatch->vertexBuffer);
+
+					glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+					glBufferData(GL_ARRAY_BUFFER, convertedVtx.size() * sizeof(CUSTOMVERTEX), convertedVtx.data(), GL_STATIC_DRAW);
+
+					ctdbatch->vertexes = convertedVtx;
 				}
-
-				std::vector<CUSTOMVERTEX> convertedVtx;
-				for (WMB3Vertex& vertex : vertexes) {
-					CUSTOMVERTEX cvtx;
-					cvtx.x = vertex.position.x;
-					cvtx.y = vertex.position.y;
-					cvtx.z = vertex.position.z;
-
-					glm::vec4 tangents = HelperFunction::DecodeTangent(vertex.tangents);
-					cvtx.tx = tangents.x;
-					cvtx.ty = tangents.y;
-					cvtx.tz = tangents.z;
-					cvtx.tw = tangents.w;
-
-					cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
-					cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
-					cvtx.color = 0xFFFFFFFF;
-					convertedVtx.push_back(cvtx);
+				else {
+					CTDLog::Log::getInstance().LogError("Unsupported vertex format! (Bayonetta 1: " + std::to_string(activeVtxGroup.vertexFlags) + ")");
+					ctdbatch->isValid = false;
 				}
-
-				if (ctdbatch->vertexBuffer == 0)
-					glGenBuffers(1, &ctdbatch->vertexBuffer);
-
-				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
-				glBufferData(GL_ARRAY_BUFFER, convertedVtx.size() * sizeof(CUSTOMVERTEX), convertedVtx.data(), GL_STATIC_DRAW);
-
-				ctdbatch->vertexes = convertedVtx;
 
 				glGenVertexArrays(1, &ctdbatch->vao);
 
@@ -1789,7 +1805,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 			return;
 		}
 		else if (wmbVersion == WMB0_BAY1) {
-
+			LoadModelWMB0(reader);
 			return;
 		}
 
@@ -2348,6 +2364,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		for (CruelerMesh* mesh : displayMeshes) {
 			if (mesh->visibility) {
 				for (CruelerBatch* batch : mesh->batches) {
+					if (!batch->isValid) continue;
 
 					glm::mat4 model = glm::mat4(1.0f);
 					glm::mat4 view = CameraManager::Instance().GetMatrixV();
@@ -3350,4 +3367,18 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		auto millisecondsnoio = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start_noio);
 
 		CTDLog::Log::getInstance().LogNote(fileIcon + " Rebuilt in " + std::to_string(millisecondsnoio.count()) + "ms: " + fileName);
+	}
+
+	TrgFileNode::TrgFileNode(std::string fName) : FileNode(fName) {
+		fileIcon = ICON_CI_CIRCUIT_BOARD;
+		nodeType = TRG;
+		fileFilter = L"Trigger Files (*.trg)\0*.trg;\0";
+	}
+
+	void TrgFileNode::LoadFile()
+	{
+	}
+
+	void TrgFileNode::SaveFile()
+	{
 	}

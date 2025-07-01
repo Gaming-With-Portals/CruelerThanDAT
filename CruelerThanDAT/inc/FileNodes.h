@@ -125,7 +125,14 @@ enum FileNodeTypes {
 	WTB,
 	LY2,
 	UID,
-	UVD
+	UVD,
+	TRG
+};
+
+enum TextureStorageMode {
+	OLD, // Old ID System, Pre MGR:R
+	NEW // New ID System, Post MGR:R
+
 };
 
 int IntLength(int);
@@ -349,6 +356,7 @@ class CruelerBatch {
 public:
 	//LPDIRECT3DVERTEXBUFFER9 vertexBuffer;
 	//LPDIRECT3DINDEXBUFFER9 indexBuffer;
+	bool isValid = true;
 	unsigned int vertexBuffer;
 	unsigned int indexBuffer;
 	unsigned int vao;
@@ -379,8 +387,18 @@ enum WmbVersionFormat {
 	WMB0_BAY1
 };
 
+class TrgFileNode : public FileNode {
+public:
+	TrgFileNode(std::string fName);
+	void LoadFile() override;
+	void SaveFile() override;
+
+};
+
+
 class WmbFileNode : public FileNode {
 private:
+	void LoadModelWMB0(BinaryReader& br);
 	void LoadModelWMB3(BinaryReader& br);
 public:
 	WmbVersionFormat wmbVersion = WMB4_MGRR;
@@ -506,6 +524,9 @@ public:
 
 class DatFileNode : public FileNode {
 public:
+	std::unordered_map<unsigned int, unsigned int> textureInfo;
+	TextureStorageMode mode;
+
 	DatFileNode(std::string fName);
 
 	void LoadFile() override;

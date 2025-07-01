@@ -153,6 +153,14 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			//outputFile->LoadFile();
 		}
+		else if (fileType == 4674132) {
+			outputFile = new TrgFileNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+			}
 		else {
 			outputFile = new UnkFileNode(fileName);
 			if (forceEndianess) {
