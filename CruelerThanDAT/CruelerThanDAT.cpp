@@ -26,7 +26,7 @@
 #include "CPKManager.h"
 #include <TextureHelper.h>
 
-const glm::uvec2 SCREEN_RESOLUTION = { 600, 800 };
+const glm::uvec2 SCREEN_RESOLUTION = { 1280, 720 };
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 std::vector<FileNode*> openFiles;
 
@@ -81,11 +81,28 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
-		else if (fileType == 876760407) {
+		else if (fileType == 876760407 || fileType == 859983191 || fileType == 4345175) {
+			unsigned int wmbMajorVersion = fileType;
+			unsigned int wmbMinorVersion = *reinterpret_cast<const uint32_t*>(&data[4]);
+
 			outputFile = new WmbFileNode(fileName);
 			if (forceEndianess) {
 				outputFile->fileIsBigEndian = bigEndian;
 			}
+
+			if (wmbMajorVersion == 876760407 && wmbMinorVersion == 0) {
+				WmbFileNode* wmb = (WmbFileNode*)outputFile;
+				wmb->wmbVersion = WMB4_MGRR;
+			}
+			else if (wmbMajorVersion == 859983191 || wmbMinorVersion == 538312982 || wmbMinorVersion == 538970148) {
+				WmbFileNode* wmb = (WmbFileNode*)outputFile;
+				wmb->wmbVersion = WMB3_BAY3;
+			}
+			else if (wmbMajorVersion == 4345175) {
+				WmbFileNode* wmb = (WmbFileNode*)outputFile;
+				wmb->wmbVersion = WMB0_BAY1;
+			}
+
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
@@ -599,6 +616,33 @@ void RenderFrame(CruelerContext *ctx) {
 			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
 
 			if (ImGui::BeginTabBar("wmb_editor")) {
+				std::string wmbVersionString = "WMB?";
+				std::string wmbGameTitle = "?";
+				if (wmbNode->wmbVersion == WMB4_MGRR) {
+					wmbVersionString = "WMB4";
+					wmbGameTitle = "Metal Gear Rising: Revengeance";
+				}
+				else if (wmbNode->wmbVersion == WMB3_BAY3) {
+					wmbVersionString = "WMB3";
+					wmbGameTitle = "Bayonetta 3";
+				}
+				else if (wmbNode->wmbVersion == WMB0_BAY1) {
+					wmbVersionString = "WMB0";
+					wmbGameTitle = "Bayonetta 1";
+				}
+
+				int textSize = ImGui::CalcTextSize((wmbVersionString + " - " + wmbGameTitle).c_str()).x;
+				if (ImGui::GetWindowWidth() - textSize - 340 > 0) {
+					ImGui::SameLine(ImGui::GetWindowWidth() - textSize - 10);
+					ImGui::Text((wmbVersionString + " - " + wmbGameTitle).c_str());
+				}
+				else if (ImGui::GetWindowWidth() - ImGui::CalcTextSize((wmbVersionString).c_str()).x - 340 > 0) {
+					ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize((wmbVersionString).c_str()).x - 10);
+					ImGui::Text((wmbVersionString).c_str());
+				}
+
+
+
 				if (ImGui::BeginTabItem("Meshes")) {
 					wmbNode->RenderGUI(ctx);
 					ImGui::EndTabItem();
@@ -889,7 +933,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 		printf("Assets are missing or corrupt. (Case 0)");
 		std::cin.get();
 	}
-	else if (!std::filesystem::exists("Assets/img.dds")) {
+	else if (!std::filesystem::exists("Assets/ctd.dat")) {
 		printf("Assets are missing or corrupt. (Case 1)");
 		std::cin.get();
 	}
@@ -925,7 +969,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 	// TODO: Resizing is not handled by the OS for borderless windows, we have to do it
 	//       manually via hit test callbacks or ditch server side decorations entirely.
 	ctx->window = SDL_CreateWindow("CruelerThanDAT",
-		ctx->winSize.x, ctx->winSize.y, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED);// | SDL_WINDOW_BORDERLESS);
+		ctx->winSize.x, ctx->winSize.y, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);// | SDL_WINDOW_BORDERLESS);
 
 	SDL_GLContext context = SDL_GL_CreateContext(ctx->window);
 	SDL_GL_MakeCurrent(ctx->window, context);

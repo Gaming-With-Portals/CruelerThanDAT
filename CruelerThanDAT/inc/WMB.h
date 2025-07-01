@@ -45,6 +45,26 @@ struct WMBVertexA {
 
 };
 
+struct WMB3Vertex {
+    WMBVector position; // 3 floats
+    WMBUV uv;
+    uint32_t tangents;
+    uint32_t  boneIndexes;
+    uint32_t  boneWeights;
+
+    void Read(BinaryReader& br) {
+        position.x = br.ReadFloat();
+        position.y = br.ReadFloat();
+        position.z = br.ReadFloat();
+        tangents = br.ReadUINT32();
+        uv.u = br.ReadUINT16();
+        uv.v = br.ReadUINT16();
+        boneIndexes = br.ReadUINT32();
+        boneWeights = br.ReadUINT32();
+    }
+
+};
+
 struct WMBVertex65847 {
     WMBVector position; // 3 floats
     WMBUV uv;

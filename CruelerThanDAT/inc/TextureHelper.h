@@ -3,11 +3,11 @@
 #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
 #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 #include "BinaryHandler.h"
-
-
+#include "astcenc.h"
 
 enum WTB_EXDATA {
 	EXDATA_XBOX,
+	EXDATA_XT1,
 	EXDATA_NONE
 };
 
@@ -69,7 +69,7 @@ public:
 		}
 
 		uint32_t version = wta.ReadUINT32();
-		if (version != 1) {
+		if (version != 1 && version != 3) {
 			return;
 		}
 		uint32_t textureCount = wta.ReadUINT32();
@@ -81,7 +81,15 @@ public:
 		uint32_t exOffset = wta.ReadUINT32();
 
 		if (exOffset != 0) {
-			exData = EXDATA_XBOX; // I don't think the PS3 has ExData, system is expandable incase
+			wta.Seek(exOffset);
+			if (wta.ReadUINT32() == 3232856 && version == 3) {
+				exData = EXDATA_XT1; 
+			}
+			else {
+				exData = EXDATA_XBOX; // I don't think the PS3 has ExData, system is expandable incase
+			}
+
+			
 		}
 		
 		wta.Seek(offsetsOffset);
@@ -165,6 +173,25 @@ public:
 					if (0 != err) {
 						printf("GL error: %d\n", err);
 					}
+				}
+				else if (exData == EXDATA_XT1) {
+					// Bayonetta 3 and possibly other games
+					wta.Seek((exOffset + (i * 52)) + 16);
+					uint32_t headerSize = wta.ReadUINT32();
+					uint32_t mipCount = wta.ReadUINT32();
+					uint32_t type = wta.ReadUINT32();
+					uint32_t format = wta.ReadUINT32();
+					uint32_t width = wta.ReadUINT32();
+					uint32_t height = wta.ReadUINT32();
+					uint32_t depth = wta.ReadUINT32();
+					wta.ReadUINT32();
+					uint32_t textureLayout = wta.ReadUINT32();
+					uint32_t textureLayout2 = wta.ReadUINT32();
+
+					wtp.Seek(offsets[i]);
+					std::vector<char> data = wtp.ReadBytes(sizes[i]);
+
+					std::cout << " ";
 				}
 			}
 			if (glTextureID != 0) {

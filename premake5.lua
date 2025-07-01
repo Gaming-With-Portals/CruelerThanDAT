@@ -169,6 +169,7 @@ workspace "CruelerThanDAT"
 			"depends/GLAD/include",
 			"depends/gli",
 			"depends/glm",
+			"depends/astc/include",
 		}
 
 		filter { "toolset:clang" }

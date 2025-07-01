@@ -1372,6 +1372,357 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 	}
 
+	void WmbFileNode::LoadModelWMB3(BinaryReader& reader)
+	{
+		struct WMB3Header {
+			uint32_t offsetBones;
+			uint32_t numBones;
+			uint32_t offsetBoneIndexTranslateTable;
+			uint32_t boneTranslateTableSize;
+			uint32_t offsetVertexGroups;
+			uint32_t numVertexGroups;
+			uint32_t offsetBatches;
+			uint32_t numBatches;
+			uint32_t offsetLods;
+			uint32_t numLods;
+			uint32_t offsetColTreeNodes;
+			uint32_t numColTreeNodes;
+			uint32_t offsetBoneMap;
+			uint32_t boneMapSize;
+			uint32_t offsetBoneSets;
+			uint32_t numBoneSets;
+			uint32_t offsetMaterials;
+			uint32_t numMaterials;
+			uint32_t offsetMeshes;
+			uint32_t numMeshes;
+			uint32_t offsetMeshMaterial;
+			uint32_t numMeshMaterial;
+		};
+
+		struct WMB3VertexGroup {
+			uint32_t vertexOffset;
+			uint32_t vertexExOffset;
+			uint32_t u_0;
+			uint32_t u_1;
+			uint32_t vertexSize;
+			uint32_t vertexExDataSize;
+			uint32_t u_2;
+			uint32_t u_3;
+			uint32_t numVertexes;
+			uint32_t vertexFlags;
+			uint32_t indexBufferOffset;
+			uint32_t numIndexes;
+
+			void Read(BinaryReader& br) {
+				vertexOffset = br.ReadUINT32();
+				vertexExOffset = br.ReadUINT32();
+				u_0 = br.ReadUINT32();
+				u_1 = br.ReadUINT32();
+				vertexSize = br.ReadUINT32();
+				vertexExDataSize = br.ReadUINT32();
+				u_2 = br.ReadUINT32();
+				u_3 = br.ReadUINT32();
+				numVertexes = br.ReadUINT32();
+				vertexFlags = br.ReadUINT32();
+				indexBufferOffset = br.ReadUINT32();
+				numIndexes = br.ReadUINT32();
+			}
+
+		};
+
+		struct WMB3Batch {
+			uint32_t vertexGroupIndex;
+			int32_t boneSetIndex;
+			uint32_t vertexStart;
+			uint32_t indexStart;
+			uint32_t numVertexes;
+			uint32_t numIndexes;
+			uint32_t numPrimitives;
+
+			void Read(BinaryReader& br) {
+				vertexGroupIndex = br.ReadUINT32();
+				boneSetIndex = br.ReadINT32();
+				vertexStart = br.ReadUINT32();
+				indexStart = br.ReadUINT32();
+				numVertexes = br.ReadUINT32();
+				numIndexes = br.ReadUINT32();
+				numPrimitives = br.ReadUINT32();
+			}
+		};
+
+		struct WMB3Mesh {
+			uint32_t offsetName;
+			WMBBoundingBox boundingBox;
+			uint32_t offsetMaterials;
+			uint32_t numMaterials;
+			uint32_t offsetBones;
+			uint32_t numBones;
+
+
+			void Read(BinaryReader& br) {
+				offsetName = br.ReadUINT32();
+				boundingBox.Read(br);
+				offsetMaterials = br.ReadUINT32();
+				numMaterials = br.ReadUINT32();
+				offsetBones = br.ReadUINT32();
+				numBones = br.ReadUINT32();
+			}
+		};
+
+		struct WMB3LODBatchInfo {
+			uint32_t vertexGroupIdx;
+			uint32_t meshIdx;
+			uint32_t materialIdx;
+			int32_t colTreeNodeIdx;
+			uint32_t meshMatPairIndex;
+			int32_t indexToUnknown;
+			uint32_t batchIdx;
+
+			void Read(BinaryReader& br) {
+				vertexGroupIdx = br.ReadUINT32();
+				meshIdx = br.ReadUINT32();
+				materialIdx = br.ReadUINT32();
+				colTreeNodeIdx = br.ReadINT32();
+				meshMatPairIndex = br.ReadUINT32();
+				indexToUnknown = br.ReadINT32();
+			};
+
+		};
+
+
+		WMB3Header header = WMB3Header();
+		reader.Seek(40);
+		header.offsetBones = reader.ReadUINT32();
+		header.numBones = reader.ReadUINT32();
+		header.offsetBoneIndexTranslateTable = reader.ReadUINT32();
+		header.boneTranslateTableSize = reader.ReadUINT32();
+		header.offsetVertexGroups = reader.ReadUINT32();
+		header.numVertexGroups = reader.ReadUINT32();
+		header.offsetBatches = reader.ReadUINT32();
+		header.numBatches = reader.ReadUINT32();
+		header.offsetLods = reader.ReadUINT32();
+		header.numLods = reader.ReadUINT32();
+		header.offsetColTreeNodes = reader.ReadUINT32();
+		header.numColTreeNodes = reader.ReadUINT32();
+		header.offsetBoneMap = reader.ReadUINT32();
+		header.boneMapSize = reader.ReadUINT32();
+		header.offsetBoneSets = reader.ReadUINT32();
+		header.numBoneSets = reader.ReadUINT32();
+		header.offsetMaterials = reader.ReadUINT32();
+		header.numMaterials = reader.ReadUINT32();
+		header.offsetMeshes = reader.ReadUINT32();
+		header.numMeshes = reader.ReadUINT32();
+		header.offsetMeshMaterial = reader.ReadUINT32();
+		header.numMeshMaterial = reader.ReadUINT32();
+		
+		reader.Seek(header.offsetVertexGroups);
+		std::vector<WMB3VertexGroup> vertexGroups;
+		for (uint32_t i = 0; i < header.numVertexGroups; i++) {
+			WMB3VertexGroup vtxGroup;
+			vtxGroup.Read(reader);
+			vertexGroups.push_back(vtxGroup);
+		}
+		reader.Seek(header.offsetBatches);
+		std::vector<WMB3Batch> batches;
+		for (uint32_t i = 0; i < header.numBatches; i++) {
+			WMB3Batch itm;
+			itm.Read(reader);
+			batches.push_back(itm);
+		}
+
+		reader.Seek(header.offsetMaterials);
+		for (uint32_t i = 0; i < header.numMaterials; i++) {
+			size_t nextMaterialPosition = reader.Tell() + 0x30;
+			CTDMaterial cmat = CTDMaterial();
+			reader.ReadUINT32Array(2);
+			uint32_t offsetName = reader.ReadUINT32();
+			uint32_t offsetShaderName = reader.ReadUINT32();
+			uint32_t offsetTechniqueName = reader.ReadUINT32();
+			reader.ReadUINT32();
+			uint32_t offsetTextures = reader.ReadUINT32();
+			uint32_t numTextures = reader.ReadUINT32();
+
+			reader.Seek(offsetShaderName);
+			cmat.shader_name = reader.ReadNullTerminatedString();
+			
+			reader.Seek(offsetTextures);
+
+			for (int j = 0; j < numTextures; j++) {
+				uint32_t offsetTexName = reader.ReadUINT32();
+				uint32_t texId = reader.ReadUINT32();
+				uint32_t nextTexPosition = reader.Tell();
+				reader.Seek(offsetTexName);
+				uint32_t falseTexFlag = 0;
+				std::string texName = reader.ReadNullTerminatedString();
+				if (texName == "g_AlbedoMap") {
+					falseTexFlag = 0;
+				}
+				else if (texName == "g_NormalMap") {
+					falseTexFlag = 2;
+				}
+				cmat.texture_data[falseTexFlag] = texId;
+
+				reader.Seek(nextTexPosition);
+			}
+
+
+			materials.push_back(cmat);
+
+			reader.Seek(nextMaterialPosition);
+		}
+
+		reader.Seek(header.offsetMeshes);
+		std::vector<WMB3Mesh> meshes;
+		for (uint32_t i = 0; i < header.numMeshes; i++) {
+			WMB3Mesh itm;
+			itm.Read(reader);
+			meshes.push_back(itm);
+		}
+
+		reader.Seek(header.offsetLods);
+		std::vector<WMB3LODBatchInfo> lodBatchInfos;
+		reader.ReadUINT32Array(3);
+		uint32_t offsetBatchInfos = reader.ReadUINT32();
+		uint32_t numBatchInfos = reader.ReadUINT32();
+		for (uint32_t i = 0; i < numBatchInfos; i++) {
+			WMB3LODBatchInfo itm;
+			itm.Read(reader);
+			itm.batchIdx = i;
+			lodBatchInfos.push_back(itm);
+		}
+
+		uint32_t meshID = 0;
+		for (WMB3Mesh& mesh : meshes) {
+			CruelerMesh* ctdmesh = new CruelerMesh();
+			ctdmesh->vtxfmt = 0;
+			reader.Seek(mesh.offsetName);
+			ctdmesh->name = reader.ReadNullTerminatedString();
+
+			reader.Seek(mesh.offsetMaterials);
+			for (uint32_t x = 0; x < mesh.numMaterials; x++) {
+				ctdmesh->materials.push_back(&materials[reader.ReadUINT16()]);
+			}
+			
+			std::vector<uint32_t> batchIDs;
+			for (WMB3LODBatchInfo& info : lodBatchInfos) {
+				if (info.meshIdx == meshID) {
+					batchIDs.push_back(info.batchIdx);
+				}
+			}
+			
+			for (uint32_t meshBatchID : batchIDs) {
+				CruelerBatch* ctdbatch = new CruelerBatch();
+
+				WMB3Batch& activeBatch = batches[meshBatchID];
+				WMB3VertexGroup& activeVtxGroup = vertexGroups[activeBatch.vertexGroupIndex];
+
+				ctdbatch->vertexCount = activeVtxGroup.numVertexes;
+				ctdbatch->indexCount = activeVtxGroup.numIndexes;
+				ctdbatch->materialID = 0; // TODO: Fix
+
+
+				reader.Seek(activeVtxGroup.indexBufferOffset + (sizeof(int) * activeBatch.indexStart));
+				std::vector<unsigned int> indices;
+				for (uint32_t x = 0; x < activeBatch.numIndexes; x++) {
+					indices.push_back(reader.ReadUINT32());
+				}
+
+				ctdbatch->indexCount = static_cast<int>(indices.size());
+				ctdbatch->indexes_wmb3 = indices;
+				glGenBuffers(1, &ctdbatch->indexBuffer);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+
+				reader.Seek(activeVtxGroup.vertexOffset + activeBatch.vertexStart * 28);
+				ctdmesh->structSize = sizeof(CUSTOMVERTEX);
+
+				std::vector<WMB3Vertex> vertexes;
+				for (uint32_t i = 0; i < activeBatch.numVertexes; i++) {
+					WMB3Vertex vtx;
+					vtx.Read(reader);
+					vertexes.push_back(vtx);
+				}
+
+				std::vector<CUSTOMVERTEX> convertedVtx;
+				for (WMB3Vertex& vertex : vertexes) {
+					CUSTOMVERTEX cvtx;
+					cvtx.x = vertex.position.x;
+					cvtx.y = vertex.position.y;
+					cvtx.z = vertex.position.z;
+
+					glm::vec4 tangents = HelperFunction::DecodeTangent(vertex.tangents);
+					cvtx.tx = tangents.x;
+					cvtx.ty = tangents.y;
+					cvtx.tz = tangents.z;
+					cvtx.tw = tangents.w;
+
+					cvtx.u = HelperFunction::HalfToFloat(vertex.uv.u);
+					cvtx.v = HelperFunction::HalfToFloat(vertex.uv.v);
+					cvtx.color = 0xFFFFFFFF;
+					convertedVtx.push_back(cvtx);
+				}
+
+				if (ctdbatch->vertexBuffer == 0)
+					glGenBuffers(1, &ctdbatch->vertexBuffer);
+
+				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+				glBufferData(GL_ARRAY_BUFFER, convertedVtx.size() * sizeof(CUSTOMVERTEX), convertedVtx.data(), GL_STATIC_DRAW);
+
+				ctdbatch->vertexes = convertedVtx;
+
+				glGenVertexArrays(1, &ctdbatch->vao);
+
+				glBindVertexArray(ctdbatch->vao);
+
+				// Rebind VBO/IBO inside VAO scope
+				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
+
+				size_t curOffset = 0;
+				// Position
+				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(0);
+				curOffset += 3 * sizeof(float);
+
+				// Color
+				glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(1);
+				curOffset += 4 * sizeof(byte);
+
+				// UV map
+				glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(2);
+				curOffset += 2 * sizeof(float);
+
+				// Normals
+				glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(3);
+				curOffset += 3 * sizeof(float);
+
+				// Tangents
+				glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(4);
+				curOffset += 4 * sizeof(float);
+
+				// Lightmap UV
+				glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(2);
+				curOffset += 2 * sizeof(float);
+
+				glBindVertexArray(0);
+
+				ctdmesh->batches.push_back(ctdbatch);
+
+			}
+
+
+			displayMeshes.push_back(ctdmesh);
+			meshID++;
+		}
+
+		return;
+	}
+
 	WmbFileNode::WmbFileNode(std::string fName) : FileNode(fName) {
 		fileIcon = ICON_CI_SYMBOL_METHOD;
 		TextColor = { 1.0f, 0.671f, 0.0f, 1.0f };
@@ -1432,6 +1783,16 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 	void WmbFileNode::LoadFile() {
 		BinaryReader reader(fileData, true);
 		reader.SetEndianess(fileIsBigEndian);
+
+		if (wmbVersion == WMB3_BAY3) {
+			LoadModelWMB3(reader);
+			return;
+		}
+		else if (wmbVersion == WMB0_BAY1) {
+
+			return;
+		}
+
 
 		GetBoneNames();
 
@@ -1839,6 +2200,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 			displayMeshes.push_back(ctdmesh);
 
 		}
+		return;
 
 }
 	void WmbFileNode::SaveFile() {
@@ -2096,6 +2458,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 					
 
 					glDrawElements(GL_TRIANGLES, batch->indexCount, GL_UNSIGNED_SHORT, 0);
+
 				}
 
 			}
@@ -2900,6 +3263,7 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		hashData.StructSize = static_cast<int>(4 + 2 * bucketTable.size() + 4 * hashTuple.size() + 2 * hashTuple.size());
 
 		BinaryWriter* writer = new BinaryWriter();
+		writer->SetEndianess(fileIsBigEndian);
 		writer->WriteString("DAT");
 		writer->WriteByteZero();
 		int fileCount = static_cast<int>(children.size());
