@@ -417,6 +417,7 @@ public:
 	bool visualizerPopout = false;
 	bool visualizerShowBones = false;
 	bool visualizerWireframe = false;
+	bool hasCutdata = false;
 
 	WmbFileNode(std::string fName);
 
@@ -432,6 +433,7 @@ public:
 
 	void RenderMesh(CruelerContext *ctx);
 
+	void RemoveCuttingDataWMB4();
 
 	struct BoneClothWK {
 		int no = 0;

@@ -306,6 +306,7 @@ struct WMBHeader {
     uint32_t numTextures;
     uint32_t offsetMeshes;
     uint32_t numMeshes;
+    uint32_t cutdataOffset;
 
     void Read(BinaryReader& br) {
         
@@ -337,7 +338,7 @@ struct WMBHeader {
         numTextures = br.ReadUINT32();
         offsetMeshes = br.ReadUINT32();
         numMeshes = br.ReadUINT32();
-
+        cutdataOffset = br.ReadUINT32();
     }
 
 

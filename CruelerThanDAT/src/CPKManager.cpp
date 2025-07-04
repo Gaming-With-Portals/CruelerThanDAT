@@ -7,6 +7,7 @@
 #include "BinaryHandler.h"
 #include "FileUtils.h"
 #include <../CruelerThanDAT.h>
+#include <LanguageManager.h>
 
 namespace fs = std::filesystem;
 
@@ -565,7 +566,7 @@ void CPKManager::Init(const std::string& dir) {
 
 void CPKManager::Render(CruelerContext *ctx) {
 	if (activeFile.type == 9) {
-		if (ImGui::Button("Select CPK Directory", ImVec2(334, 20))) {
+		if (ImGui::Button(LanguageManager::Instance().TR("Select CPK Directory"), ImVec2(334, 20))) {
 			HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 			if (SUCCEEDED(hr))
 			{

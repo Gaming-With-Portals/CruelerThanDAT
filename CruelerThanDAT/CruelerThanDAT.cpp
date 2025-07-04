@@ -25,6 +25,7 @@
 #include "CTDSettings.h"
 #include "CPKManager.h"
 #include <TextureHelper.h>
+#include <LanguageManager.h>
 
 const glm::uvec2 SCREEN_RESOLUTION = { 1280, 720 };
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
@@ -502,10 +503,10 @@ void RenderFrame(CruelerContext *ctx) {
 
 	if (ImGui::BeginTabBar("primary_control")) {
 
-		if (ImGui::BeginTabItem("Data Viewer")) {
+		if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Data Viewer"))) {
 			if (openFiles.size() == 0) {
-				ImGui::Text("No open files yet!");
-				ImGui::Text("Drag a file onto the window to get started");
+				ImGui::Text(LanguageManager::Instance().TR("No open files yet!"));
+				ImGui::Text(LanguageManager::Instance().TR("Drag a file onto the window to get started"));
 			}
 
 
@@ -515,21 +516,21 @@ void RenderFrame(CruelerContext *ctx) {
 
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("CPK Viewer")) {
+		if (ImGui::BeginTabItem(LanguageManager::Instance().TR("CPK Viewer"))) {
 
 			ctx->cpkManager->Render(ctx);
 
 
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Configuration")) {
-			if (ImGui::Button("SAVE")) {
+		if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Configuration"))) {
+			if (ImGui::Button(LanguageManager::Instance().TR("Save"))) {
 				ctx->config.Write();
 			}
 
 			ImGui::Text("WMB/SCR");
-			ImGui::Checkbox("Automatically Load Textures", &ctx->config.AutomaticallyLoadTextures);
-			ImGui::Checkbox("Show All SCR Meshes By Default", &ctx->config.ShowAllMeshesByDefault);
+			ImGui::Checkbox(LanguageManager::Instance().TR("Automatically Load Textures"), &ctx->config.AutomaticallyLoadTextures);
+			ImGui::Checkbox(LanguageManager::Instance().TR("Show All SCR Meshes By Default"), &ctx->config.ShowAllMeshesByDefault);
 
 			ImGui::Text("Theme");
 			if (ImGui::Button("ImGui Theme")) {
@@ -540,6 +541,14 @@ void RenderFrame(CruelerContext *ctx) {
 			}
 			if (ImGui::Button("Half Life Theme")) {
 				ctx->themeManager->ChooseStyle(2);
+			}
+
+			ImGui::SeparatorText("Language");
+			if (ImGui::Button("English")) {
+				LanguageManager::Instance().currentLang = &LanguageManager::Instance().lang_en;
+			}
+			if (ImGui::Button("Espanol")) {
+				LanguageManager::Instance().currentLang = &LanguageManager::Instance().lang_es;
 			}
 
 			ImGui::EndTabItem();
@@ -651,12 +660,12 @@ void RenderFrame(CruelerContext *ctx) {
 
 
 
-				if (ImGui::BeginTabItem("Meshes")) {
+				if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Meshes"))) {
 					wmbNode->RenderGUI(ctx);
 					ImGui::EndTabItem();
 				}
 
-				if (ImGui::BeginTabItem("Materials")) {
+				if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Materials"))) {
 					ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
 					ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
 					if (ImGui::Button("Fetch Textures")) {
@@ -693,7 +702,7 @@ void RenderFrame(CruelerContext *ctx) {
 					ImGui::EndTabItem();
 				}
 				if (!wmbNode->isSCR) {
-					if (ImGui::BeginTabItem("Skeleton")) {
+					if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Skeleton"))) {
 
 						wmbNode->RenderBoneGUI();
 
@@ -711,12 +720,20 @@ void RenderFrame(CruelerContext *ctx) {
 					}
 				}
 
-				if (ImGui::BeginTabItem("Visualizer")) {
-					ImGui::SetNextItemWidth(120.0f);
-					ImGui::SliderFloat("FOV", &fov, 20.0f, 100.0f);
-					//ImGui::Checkbox("Spin Model?", &spinModel);
-					ImGui::EndTabItem(); 
+				if (wmbNode->wmbVersion == WMB4_MGRR) {
+					if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Tools"))) {
+						if (wmbNode->hasCutdata) {
+							if (ImGui::Button("Remove Cutting Data")) {
+								wmbNode->RemoveCuttingDataWMB4();
+							}
+							ImGui::SameLine();
+							HelpMarker("This operation is irreversible, you will need to re-export your mesh if you want cutdata later");
+						}
+
+						ImGui::EndTabItem();
+					}
 				}
+
 
 				ImGui::EndTabBar();
 			}

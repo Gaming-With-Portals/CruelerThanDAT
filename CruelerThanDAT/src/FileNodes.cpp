@@ -1815,6 +1815,10 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		WMBHeader header = WMBHeader();
 		header.Read(reader);
 
+		if (header.cutdataOffset != 0) {
+			hasCutdata = true;
+		}
+
 		reader.Seek(header.offsetVertexGroups);
 		std::vector<WMBVertexGroup> vertexGroups;
 		for (uint32_t i = 0; i < header.numVertexGroups; i++) {
@@ -2538,6 +2542,17 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		drawData.Valid = true;
 
 		ImGui_ImplOpenGL3_RenderDrawData(&drawData);
+	}
+
+	void WmbFileNode::RemoveCuttingDataWMB4()
+	{
+		BinaryWriter* writer = new BinaryWriter(false);
+		writer->WriteBytes(fileData);
+		writer->Seek(108);
+		writer->WriteUINT32(0);
+		hasCutdata = false;
+		fileData = writer->GetData();
+		delete writer;
 	}
 
 	bool WmbFileNode::InitData(int rootBoneID) {
