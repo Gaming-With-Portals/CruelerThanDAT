@@ -4,6 +4,3 @@
 [submodule "depends/glm"]
 	path = depends/glm
 	url = https://github.com/g-truc/glm
-[submodule "depends/ddspp"]
-	path = depends/ddspp
-	url = https://github.com/redorav/ddspp
