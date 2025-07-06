@@ -43,6 +43,8 @@ private:
         if (!success) {
             char infoLog[512];
             glGetShaderInfoLog(shader, 512, NULL, infoLog);
+            CTDLog::Log::getInstance().LogError("Failed to compile shader:");
+            CTDLog::Log::getInstance().LogError(infoLog);
             return 0;
         }
 
@@ -66,6 +68,8 @@ private:
         if (!success) {
             char infoLog[512];
             glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+            CTDLog::Log::getInstance().LogError("Failed to link shader program:");
+            CTDLog::Log::getInstance().LogError(infoLog);
             return 0;
         }
 

@@ -51,6 +51,7 @@ workspace "CruelerThanDAT"
 				libdirs {
 					path.join(fbx,		"lib/x64/debug/"),
 					"depends/SDL3/lib/x64/",
+					"depends/ddz/",
 					"build-curl/%{cfg.longname}/lib/",
 				}
 				
@@ -60,11 +61,13 @@ workspace "CruelerThanDAT"
 					'{COPY} "%{prj.location}/CruelerThanDAT/Assets" "%{cfg.buildtarget.directory}/Assets"',
 					'{COPYFILE} "%{prj.location}/depends/SDL3/lib/x64/SDL3.dll" "%{cfg.buildtarget.directory}/SDL3.dll"',
 					'{COPYFILE} "%{prj.location}/depends/SDL3/LICENSE.txt" "%{cfg.buildtarget.directory}/SDL3_LICENSE"',
+					'{COPYFILE} "%{prj.location}/depends/ddz/ddz.dll" "%{cfg.buildtarget.directory}/ddz.dll',
 				}
 			filter { "configurations:Release" }
 				libdirs {
 					path.join(fbx,		"lib/x64/release/"),
 					"depends/SDL3/lib/x64/",
+					"depends/ddz/",
 					"build-curl/%{cfg.longname}/lib/",
 				}
 				
@@ -75,6 +78,7 @@ workspace "CruelerThanDAT"
 					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
 					'{COPYFILE} "%{prj.location}/depends/SDL3/lib/x64/SDL3.dll" "%{cfg.buildtarget.directory}/SDL3.dll"',
 					'{COPYFILE} "%{prj.location}/depends/SDL3/LICENSE.txt" "%{cfg.buildtarget.directory}/SDL3_LICENSE"',
+					'{COPYFILE} "%{prj.location}/depends/ddz/ddz.dll" "%{cfg.buildtarget.directory}/ddz.dll',
 				}
 			filter {}
 
@@ -104,6 +108,7 @@ workspace "CruelerThanDAT"
 				libdirs {
 					path.join(fbx,		"lib/x64/debug/"),
 					"depends/SDL3/lib/x64/",
+					"depends/ddz/",
 					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 				}
 				
@@ -114,11 +119,13 @@ workspace "CruelerThanDAT"
 					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
 					'{COPYFILE} "%{prj.location}/depends/SDL3/lib/x64/SDL3.dll" "%{cfg.buildtarget.directory}/SDL3.dll"',
 					'{COPYFILE} "%{prj.location}/depends/SDL3/LICENSE.txt" "%{cfg.buildtarget.directory}/SDL3_LICENSE"',
+					'{COPYFILE} "%{prj.location}/depends/ddz/ddz.dll" "%{cfg.buildtarget.directory}/ddz.dll',
 				}
 			filter { "configurations:Release" }
 				libdirs {
 					path.join(fbx,		"lib/x64/release/"),
 					"depends/SDL3/lib/x64/",
+					"depends/ddz/",
 					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 				}
 				
@@ -129,6 +136,7 @@ workspace "CruelerThanDAT"
 					'{COPYFILE} "%{prj.location}/depends/curl/COPYING" "%{cfg.buildtarget.directory}/CURL_LICENSE"',
 					'{COPYFILE} "%{prj.location}/depends/SDL3/lib/x64/SDL3.dll" "%{cfg.buildtarget.directory}/SDL3.dll"',
 					'{COPYFILE} "%{prj.location}/depends/SDL3/LICENSE.txt" "%{cfg.buildtarget.directory}/SDL3_LICENSE"',
+					'{COPYFILE} "%{prj.location}/depends/ddz/ddz.dll" "%{cfg.buildtarget.directory}/ddz.dll',
 				}
 			filter {}
 
@@ -169,7 +177,8 @@ workspace "CruelerThanDAT"
 			"depends/GLAD/include/",
 			"depends/gli/",
 			"depends/glm/",
-			"depends/ddpss/",
+			"depends/astc/include/",
+			"depends/ddz/",
 		}
 
 		filter { "toolset:clang" }
@@ -194,6 +203,7 @@ workspace "CruelerThanDAT"
 				"SDL3",
 				"libfbxsdk",
 				"libcurl-d",
+				"ddz",
 			}
 		
 		filter { "configurations:Release" }
@@ -209,4 +219,5 @@ workspace "CruelerThanDAT"
 				"SDL3",
 				"libfbxsdk",
 				"libcurl",
+				"ddz",
 			}

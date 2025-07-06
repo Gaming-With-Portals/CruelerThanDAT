@@ -356,6 +356,7 @@ public:
 	unsigned int vao;
 	std::vector<CUSTOMVERTEX> vertexes;
 	std::vector<unsigned short> indexes;
+	std::vector<unsigned int> indexes_wmb3;
 	int indexCount;
 	int vertexCount;
 	int materialID;
@@ -374,8 +375,17 @@ public:
 
 };
 
+enum WmbVersionFormat {
+	WMB4_MGRR,
+	WMB3_BAY3,
+	WMB0_BAY1
+};
+
 class WmbFileNode : public FileNode {
+private:
+	void LoadModelWMB3(BinaryReader& br);
 public:
+	WmbVersionFormat wmbVersion = WMB4_MGRR;
 	WMBVector meshOffset;
 	WMBVector scaleOffset;
 	WMBVector meshRotation;
