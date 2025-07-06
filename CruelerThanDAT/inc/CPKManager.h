@@ -114,7 +114,7 @@ class CPKManager {
 	bool hasResetProgressBar = true;
 	void MakeTree(const fs::path& dirPath, CPKMGMTFile& node);
 
-	void RenderTree(const CPKMGMTFile& file);
+	void RenderTree(const CruelerContext *ctx, const CPKMGMTFile& file);
 
 	CRIUTFTable CriUTF(BinaryReader& br);
 

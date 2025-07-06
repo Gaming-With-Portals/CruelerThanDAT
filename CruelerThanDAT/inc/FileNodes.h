@@ -63,6 +63,8 @@ struct CruelerContext {
 	std::unordered_map<unsigned int, unsigned int> textureMap;
 	std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
 
+	nlohmann::json plNames;
+
 	bool showAllScrMeshes = false;
 	bool cruelerLog = true;
 
