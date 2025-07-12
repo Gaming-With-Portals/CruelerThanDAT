@@ -22,6 +22,7 @@ public:
     unsigned int decalShader = 0;
     unsigned int skinShader = 0;
     unsigned int stageShader = 0;
+    unsigned int outlineShader = 0;
 private:
 
     std::string loadShaderSource(const char* filePath) {
@@ -84,8 +85,9 @@ private:
         decalShader = createShaderProgram("Assets/System/OGL/decal.vert", "Assets/System/OGL/decal.frag");
         skinShader = createShaderProgram("Assets/System/OGL/skin.vert", "Assets/System/OGL/skin.frag");
         stageShader = createShaderProgram("Assets/System/OGL/stage.vert", "Assets/System/OGL/stage.frag");
+        outlineShader = createShaderProgram("Assets/System/OGL/highlight.vert", "Assets/System/OGL/highlight.frag");
         return;
     }
-
+ 
     ~ShaderManager() = default;
 };

@@ -59,6 +59,16 @@ public:
 
     }
 
+    std::vector<float> ReadFloatArray(int count) {
+        std::vector<float> output;
+        for (int i = 0; i < count; i++) {
+            output.push_back(ReadFloat());
+        }
+
+
+        return output;
+
+    }
 
     int8_t ReadINT8() {
         if (offset + sizeof(int8_t) > data.size()) {

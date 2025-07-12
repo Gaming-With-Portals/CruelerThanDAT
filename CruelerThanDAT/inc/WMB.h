@@ -9,8 +9,15 @@
 struct CTDMaterial {
     std::string shader_name;
     std::map<unsigned int, unsigned int> texture_data;
-    
-    
+
+    std::vector<std::array<float, 4>> parameters;
+    unsigned int materialDataOffset;
+
+
+    unsigned int glFramebuffer = 0;
+    unsigned int glFrametexture;
+
+    bool highlight = false;
 
 };
 

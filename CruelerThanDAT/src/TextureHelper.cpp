@@ -63,7 +63,9 @@ void TextureHelper::LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordere
 	}
 
 	uint32_t version = wta.ReadUINT32();
-	if (version != 1 && version != 3) {
+
+
+	if (version != 1 && version != 3 && version != 0) {
 		return;
 	}
 	uint32_t textureCount = wta.ReadUINT32();
@@ -90,10 +92,21 @@ void TextureHelper::LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordere
 	std::vector<uint32_t> sizes = wta.ReadUINT32Array(textureCount);
 	wta.Seek(flagOffset);
 	std::vector<uint32_t> flags = wta.ReadUINT32Array(textureCount);
-	wta.Seek(idOffset);
-	std::vector<uint32_t> ids = wta.ReadUINT32Array(textureCount);
+	std::vector<uint32_t> ids;
+	if (idOffset == 0) {
+		
+		for (uint32_t i = 0; i < textureCount; i++) { ids.push_back(i); };
+	}
+	else {
+		wta.Seek(idOffset);
+		ids = wta.ReadUINT32Array(textureCount);
+	}
+
 
 	for (uint32_t i = 0; i < textureCount; i++) {
+		if (sizes[i] == 0) {continue;}
+
+
 		unsigned int glTextureID = 0;
 		wtp.Seek(offsets[i]);
 		uint32_t identifier = wtp.ReadUINT32();
@@ -111,7 +124,8 @@ void TextureHelper::LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordere
 				glCompressedTexImage2D(target, static_cast<GLint>(Level), Format.Internal, extent.x, extent.y, 0, static_cast<GLsizei>(tex.size(Level)), tex.data(0, 0, Level));
 			}
 			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-			glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);				
+			glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);		
+			glGenerateMipmap(target);
 		}
 		else {
 			if (exData == EXDATA_XBOX) {
@@ -226,6 +240,8 @@ void TextureHelper::LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordere
 						DDZ_PLATFORM_PC_LE, DDZ_PLATFORM_XBOX_360,
 						DDZ_FORMAT_RGBA32, DDZ_FORMAT_DXT5,
 						width, height);
+					std::ofstream dump("converted_texture.raw", std::ios::binary);
+					dump.write(reinterpret_cast<char*>(ptr), len);
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
 						width, height, 0,
 						GL_RGBA, GL_UNSIGNED_BYTE,
@@ -277,6 +293,8 @@ void TextureHelper::LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordere
 
 				wtp.Seek(offsets[i]);
 				std::vector<char> data = wtp.ReadBytes(sizes[i]);
+
+				
 
 				std::cout << " ";
 			}

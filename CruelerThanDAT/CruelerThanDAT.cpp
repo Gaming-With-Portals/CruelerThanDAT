@@ -81,6 +81,14 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
+		else if (fileType == 4605509) {
+			outputFile = new EstFileNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+		}
 		else if (fileType == 876760407 || fileType == 859983191 || fileType == 4345175) {
 			unsigned int wmbMajorVersion = fileType;
 			unsigned int wmbMinorVersion = *reinterpret_cast<const uint32_t*>(&data[4]);
@@ -145,6 +153,14 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
+		else if (fileType == 3294789) {
+			outputFile = new BayoEffNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+			}
 		else if (fileType == 4346967) {
 			outputFile = new WtbFileNode(fileName);
 			if (forceEndianess) {
@@ -161,6 +177,22 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 			}
+		else if (fileExtension == ".clp" || fileExtension == ".clh" || fileExtension == ".clw") {
+			// If it didn't get flagged as BXM, it's probably a bayo 1 file
+			outputFile = new BayoClpClhClwFileNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			
+			if (fileExtension == ".clp") { ((BayoClpClhClwFileNode*)outputFile)->type = B1_CLP; };
+			if (fileExtension == ".clh") { ((BayoClpClhClwFileNode*)outputFile)->type = B1_CLH; };
+			if (fileExtension == ".clw") { ((BayoClpClhClwFileNode*)outputFile)->type = B1_CLW; };
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+
+		}
+
+
 		else {
 			outputFile = new UnkFileNode(fileName);
 			if (forceEndianess) {
@@ -374,6 +406,13 @@ void PopulateTextures(CruelerContext *ctx) {
 
 		}
 		else {
+			for (FileNode* child : node->children) {
+				if (child->fileExtension == "wtb") {
+					BinaryReader wta = BinaryReader(child->fileData);
+					TextureHelper::LoadData(wta, wta, ctx->textureMap);
+				}
+			}
+
 			CTDLog::Log::getInstance().LogWarning("No DTT file associated with " + node->fileName);
 		}
 
@@ -615,6 +654,10 @@ void RenderFrame(CruelerContext *ctx) {
 			LY2FileNode* ly2Node = ((LY2FileNode*)FileNode::selectedNode);
 			ly2Node->RenderGUI(ctx);
 		}
+		else if (FileNode::selectedNode->nodeType == FileNodeTypes::EST) {
+			EstFileNode* estNode = ((EstFileNode*)FileNode::selectedNode);
+			estNode->RenderGUI(ctx);
+		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::UID) {
 			UidFileNode* uidNode = ((UidFileNode*)FileNode::selectedNode);
 			uidNode->RenderGUI(ctx);
@@ -626,6 +669,11 @@ void RenderFrame(CruelerContext *ctx) {
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::BNK) {
 			BnkFileNode* bnkNode = ((BnkFileNode*)FileNode::selectedNode);
 			bnkNode->RenderGUI(ctx);
+		}
+		else if (FileNode::selectedNode->nodeType == FileNodeTypes::B1PHYS) {
+			BayoClpClhClwFileNode* physNode = ((BayoClpClhClwFileNode*)FileNode::selectedNode);
+			physNode->RenderGUI(ctx);
+
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
 			ctx->viewportShow = false;
@@ -647,6 +695,10 @@ void RenderFrame(CruelerContext *ctx) {
 					wmbGameTitle = "Bayonetta 1";
 				}
 
+				else if (wmbNode->wmbVersion == WMB0_BAY2) {
+					wmbVersionString = "WMB0";
+					wmbGameTitle = "Bayonetta 2";
+				}
 				int textSize = ImGui::CalcTextSize((wmbVersionString + " - " + wmbGameTitle).c_str()).x;
 				if (ImGui::GetWindowWidth() - textSize - 340 > 0) {
 					ImGui::SameLine(ImGui::GetWindowWidth() - textSize - 10);
@@ -675,7 +727,88 @@ void RenderFrame(CruelerContext *ctx) {
 
 					int i = 0;
 					for (CTDMaterial& mat : wmbNode->materials) {
+						if (mat.glFramebuffer == 0) {
+							glEnable(GL_DEPTH_TEST);
+							static WmbFileNode* renderMesh = (WmbFileNode*)FileNodeFromFilepath("Assets/Model/preview.wmb");
+							// Create fbo and render material
+							renderMesh->materials[0] = mat;
+							glGenFramebuffers(1, &mat.glFramebuffer);
+							glBindFramebuffer(GL_FRAMEBUFFER, mat.glFramebuffer);
 
+							glGenTextures(1, &mat.glFrametexture);
+							glBindTexture(GL_TEXTURE_2D, mat.glFrametexture);
+							glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+							glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mat.glFrametexture, 0);
+
+							GLuint depthRBO;
+							glGenRenderbuffers(1, &depthRBO);
+							glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+							glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+							glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+
+							glBindFramebuffer(GL_FRAMEBUFFER, mat.glFramebuffer);
+							glViewport(0, 0, 512, 512);
+							glClearColor(0.0, 0.0, 0.0, 0.0);
+							glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+							renderMesh->RenderPreviewMesh(ctx);
+
+							glBindFramebuffer(GL_FRAMEBUFFER, 0);
+							glViewport(0, 0, ctx->winSize.x, ctx->winSize.y);
+
+						}
+
+
+
+
+						ImGui::Text((("Material " + std::to_string(i))).c_str());
+						if (ImGui::IsItemHovered()) {
+							mat.highlight = true;
+						}
+						else {
+							mat.highlight = false;
+						}
+						ImGui::BeginGroup();
+						ImGui::Image((ImTextureID)(intptr_t)mat.glFrametexture, ImVec2(64, 64));
+						ImGui::EndGroup();
+						ImGui::SameLine();
+						ImGui::BeginGroup();
+						for (const auto& pair : mat.texture_data) {
+							std::string textureString = "Tex" + std::to_string(pair.first) + ": %d";
+							if (TEXTURE_DEF.find(pair.first) != TEXTURE_DEF.end()) {
+								textureString = TEXTURE_DEF[pair.first] + ": %d";
+							}
+							
+							
+							if (ctx->textureMap.contains(pair.second)) {
+								ImGui::TextColored(ImVec4(0.0, 1.0, 1.0, 1.0) , textureString.c_str(), pair.second);
+								if (ImGui::IsItemHovered()) {
+									ImGui::BeginTooltip();
+									ImGui::Image((ImTextureID)(intptr_t)ctx->textureMap[pair.second], ImVec2(96, 96));
+									ImGui::EndTooltip();
+								}
+							}
+							else {
+								ImGui::Text(textureString.c_str(), pair.second);
+							}
+	
+
+						}
+						ImGui::EndGroup();
+						if (ImGui::CollapsingHeader(("Parameters###" + std::to_string(i)).c_str())) {
+							int j = 0;
+							for (std::array<float, 4>&array : mat.parameters) {
+								ImGui::InputFloat4(("###parameter_" + std::to_string(i) + "_" + std::to_string(j)).c_str(), array.data());
+
+								j += 1;
+							}
+						}
+
+
+						ImGui::Separator();
+
+						/*ImGui::SameLine();
 						if (ImGui::TreeNode((("Material " + std::to_string(i))).c_str())) {
 
 							ImGui::Text("Shader Name: %s", mat.shader_name.c_str());
@@ -690,7 +823,7 @@ void RenderFrame(CruelerContext *ctx) {
 							}
 
 							ImGui::TreePop();
-						}
+						}*/
 
 						i += 1;
 					}
@@ -930,19 +1063,6 @@ void RenderFrame(CruelerContext *ctx) {
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-	DdzInit();
-
-	std::ifstream pldb("Assets/pl.json");
-	auto ctx = new CruelerContext{
-		.args = std::vector<std::string>(argv, argv + argc),
-		.winSize = SCREEN_RESOLUTION,
-		.viewportShow = true,
-		.projMatrix = glm::mat4(1.f),
-		.viewMatrix = glm::mat4(1.f),
-		.plNames = nlohmann::json::parse(pldb),
-		.cruelerLog = true,
-	};
-	pldb.close();
 
 	printf("-- CruelerThanDAT --\n");
 
@@ -974,6 +1094,21 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 		printf("OpenGL Data is missing or corrupt. (Case 0)");
 		std::cin.get();
 	}
+
+	DdzInit();
+
+	std::ifstream pldb("Assets/pl.json");
+	auto ctx = new CruelerContext{
+		.args = std::vector<std::string>(argv, argv + argc),
+		.winSize = SCREEN_RESOLUTION,
+		.viewportShow = true,
+		.projMatrix = glm::mat4(1.f),
+		.viewMatrix = glm::mat4(1.f),
+		.plNames = nlohmann::json::parse(pldb),
+		.cruelerLog = true,
+	};
+	pldb.close();
+
 
 	ctx->themeManager = new ThemeManager();
 	ctx->themeManager->UpdateThemeList();

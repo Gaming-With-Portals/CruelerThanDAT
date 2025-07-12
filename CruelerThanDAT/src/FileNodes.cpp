@@ -1372,14 +1372,327 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 	}
 
+	MGRVector DecodeNormalWMB0(uint32_t packed) {
+		int8_t nz = (int8_t)((packed >> 0) & 0xFF);
+		int8_t ny = (int8_t)((packed >> 8) & 0xFF);
+		int8_t nx = (int8_t)((packed >> 16) & 0xFF);
+
+		constexpr float scale = 1.0f / 127.0f;
+
+		MGRVector normal;
+		normal.x = nx * scale;
+		normal.y = ny * scale;
+		normal.z = nz * scale;
+
+		return normal;
+	}
+
+
 	void WmbFileNode::LoadModelWMB0(BinaryReader& reader)
 	{
-		/*reader.ReadUINT32();
+		reader.ReadUINT32();
 		reader.ReadUINT32();
 		uint32_t vertexFormat = reader.ReadUINT32();
 		uint32_t numVertexes = reader.ReadUINT32();
 		uint8_t numMapping = reader.ReadINT8();
-		uint8_t numColor = reader.ReadINT8();*/
+		uint8_t numColor = reader.ReadINT8();
+		uint16_t unknownE = reader.ReadINT16();
+		uint32_t offsetPositions = reader.ReadUINT32();
+		uint32_t offsetVertexes = reader.ReadUINT32();
+		uint32_t offsetVertexesExData = reader.ReadUINT32();
+		reader.ReadUINT32Array(4); // Unknown G4
+		uint32_t numBones = reader.ReadUINT32();
+		uint32_t offsetBoneHierarchy = reader.ReadUINT32();
+		uint32_t offsetBoneRelativePosition = reader.ReadUINT32();
+		uint32_t offsetBonePosition = reader.ReadUINT32();
+		uint32_t offsetBoneIndexTranslateTable = reader.ReadUINT32();
+		uint32_t numMaterials = reader.ReadINT32();
+		uint32_t offsetMaterialsOffset = reader.ReadUINT32();
+		uint32_t offsetMaterials = reader.ReadUINT32();
+		uint32_t numMeshes = reader.ReadINT32();
+		uint32_t offsetMeshesOffsets = reader.ReadUINT32();
+		uint32_t offsetMeshes = reader.ReadUINT32();
+		uint32_t numPolygons = reader.ReadINT32();
+		uint32_t numShaderSettings = reader.ReadINT32();
+		uint32_t offsetInverseKinetic = reader.ReadUINT32();
+		uint32_t offsetBoneSymmetries = reader.ReadUINT32();
+		uint32_t offsetBoneFlags = reader.ReadUINT32();
+		uint32_t exMatShaderNamesOffset = reader.ReadUINT32();
+		uint32_t exMatSamplers = reader.ReadUINT32();
+		std::vector<uint32_t> exMatInfo = reader.ReadUINT32Array(2); // ExMat Info
+		if (exMatInfo[0] != 0) {
+			wmbVersion = WMB0_BAY2;
+		}
+
+
+		struct WMB0BatchHeader {
+			uint16_t batchIdx;
+			uint16_t id;
+			uint16_t flags;
+			uint8_t exMaterialID;
+			uint8_t materialID;
+			uint8_t hasBoneRefs;
+			uint8_t unknownE1;
+			uint8_t unknownE2;
+			uint32_t vertexStart;
+			uint32_t vertexEnd;
+			uint32_t primitiveType;
+			uint32_t offsetIndices;
+			uint32_t numIndices;
+			uint32_t vertexOffset;
+			uint32_t numBoneRefs;
+			std::vector<uint16_t> indices;
+
+			void Read(BinaryReader& br) {
+				size_t batchStart = br.Tell();
+				batchIdx = br.ReadUINT16();
+				id = br.ReadUINT16();
+				flags = br.ReadUINT16();
+				exMaterialID = br.ReadUINT16();
+				materialID = br.ReadINT8();
+				hasBoneRefs = br.ReadINT8();
+				unknownE1 = br.ReadINT8();
+				unknownE2 = br.ReadINT8();
+				vertexStart = br.ReadUINT32();
+				vertexEnd = br.ReadUINT32();
+				primitiveType = br.ReadUINT32();
+				offsetIndices = br.ReadUINT32();
+				numIndices = br.ReadUINT32();
+				vertexOffset = br.ReadUINT32();
+				br.ReadUINT32Array(7);
+				numBoneRefs = br.ReadUINT32();
+
+				br.Seek(batchStart + offsetIndices);
+				indices = br.ReadUINT16Array(numIndices);
+
+			}
+
+		};
+
+
+		struct WMB0MeshHeader {
+			uint16_t id;
+			uint16_t numBatch;
+			uint16_t unknownA1;
+			uint16_t boundingBoxInfos;
+			uint32_t offsetBatchOffsets;
+			int32_t flags;
+			uint32_t unknown_c_0;
+			uint32_t unknown_c_1;
+			uint32_t unknown_c_2;
+			uint32_t unknown_c_3;
+			std::string name;
+			WMBVector center;
+			float height;
+			WMBVector corner1;
+			WMBVector corner2;
+			float unknownD;
+			float unknownE;
+			std::vector<WMB0BatchHeader> batches;
+
+			void Read(BinaryReader& br) {
+				size_t meshStart = br.Tell();
+				id = br.ReadUINT16();
+				numBatch = br.ReadUINT16();
+				unknownA1 = br.ReadUINT16();
+				boundingBoxInfos = br.ReadUINT16();
+				offsetBatchOffsets = br.ReadUINT32();
+				flags = br.ReadUINT32();
+				unknown_c_0 = br.ReadUINT32();
+				unknown_c_1 = br.ReadUINT32();
+				unknown_c_2 = br.ReadUINT32();
+				unknown_c_3 = br.ReadUINT32();
+				name = br.ReadString(32);
+				center.x = br.ReadFloat();
+				center.y = br.ReadFloat();
+				center.z = br.ReadFloat();
+				height = br.ReadFloat();
+				corner1.x = br.ReadFloat();
+				corner1.y = br.ReadFloat();
+				corner1.z = br.ReadFloat();
+				corner2.x = br.ReadFloat();
+				corner2.y = br.ReadFloat();
+				corner2.z = br.ReadFloat();
+				unknownD = br.ReadFloat();
+				unknownE = br.ReadFloat();
+
+				br.Seek(meshStart + offsetBatchOffsets);
+				std::vector<uint32_t> batchOffsets = br.ReadUINT32Array(numBatch);
+				for (uint32_t batch : batchOffsets) {
+					br.Seek(meshStart + offsetBatchOffsets + batch);
+					WMB0BatchHeader batch;
+					batch.Read(br);
+					batches.push_back(batch);
+				}
+
+			}
+		};
+
+		std::vector<CUSTOMVERTEX> vertexPool;
+
+		reader.Seek(offsetVertexes);
+		for (uint32_t i = 0; i < numVertexes; i++) {
+			CUSTOMVERTEX cvtx = CUSTOMVERTEX();
+
+			if (vertexFormat != 0x4000001F) {
+				cvtx.x = reader.ReadFloat();
+				cvtx.y = reader.ReadFloat();
+				cvtx.z = reader.ReadFloat();
+
+
+				cvtx.u = HelperFunction::HalfToFloat(reader.ReadUINT16());
+				cvtx.v = HelperFunction::HalfToFloat(reader.ReadUINT16());
+
+				MGRVector normals = DecodeNormalWMB0(reader.ReadUINT32());
+				cvtx.nx = normals.x;
+				cvtx.ny = normals.y;
+				cvtx.nz = normals.z;
+				glm::vec4 tangents = HelperFunction::DecodeTangent(reader.ReadUINT32());
+				cvtx.tx = tangents.x;
+				cvtx.ty = tangents.y;
+				cvtx.tz = tangents.z;
+				cvtx.tw = tangents.w;
+
+				reader.ReadUINT32();
+				reader.ReadUINT32();
+
+				cvtx.color = 0xFFFFFFFF;
+			}
+
+
+
+			vertexPool.push_back(cvtx);
+
+		}
+
+
+
+		reader.Seek(offsetMeshesOffsets);
+		std::vector<uint32_t> offsetMeshArray = reader.ReadUINT32Array(numMeshes);
+		std::vector<WMB0MeshHeader> meshHeaders;
+		for (uint32_t i = 0; i < numMeshes; i++) {
+			reader.Seek(offsetMeshes + offsetMeshArray[i]);
+			WMB0MeshHeader mshHeader;
+			mshHeader.Read(reader);
+
+			meshHeaders.push_back(mshHeader);
+			
+		}
+
+		reader.Seek(offsetMaterialsOffset);
+		std::vector<uint32_t> offsetMaterialsArray = reader.ReadUINT32Array(numMaterials);
+
+		for (uint32_t i = 0; i < numMaterials; i++) {
+			CTDMaterial mat;
+			reader.Seek(offsetMaterials + offsetMaterialsArray[i]);
+			uint32_t materialID = reader.ReadUINT16();
+			reader.ReadUINT16();
+
+			mat.texture_data[0] = reader.ReadUINT32();
+			mat.texture_data[2] = reader.ReadUINT32();
+
+			materials.push_back(mat);
+		}
+
+		for (WMB0MeshHeader& mesh : meshHeaders) {
+			CruelerMesh* cmesh = new CruelerMesh();
+			cmesh->name = mesh.name;
+			
+			for (WMB0BatchHeader& batch : mesh.batches) {
+				CruelerBatch* ctdbatch = new CruelerBatch();
+				std::vector<uint16_t> remappedIndices;
+				if (batch.primitiveType == 5) {
+					ctdbatch->drawMethod = GL_TRIANGLE_STRIP;
+
+					
+					remappedIndices.reserve(batch.indices.size());
+
+					for (uint16_t idx : batch.indices) {
+						remappedIndices.push_back(idx - batch.vertexStart);
+					}
+				}
+				else {
+					remappedIndices = batch.indices;
+				}
+
+				ctdbatch->materialID = batch.materialID;
+
+				ctdbatch->indexCount = batch.numIndices;
+
+
+
+				glGenBuffers(1, &ctdbatch->indexBuffer);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, remappedIndices.size() * sizeof(unsigned short), remappedIndices.data(), GL_STATIC_DRAW);
+
+				// Vertexes
+				std::vector<CUSTOMVERTEX> batchSubPool(
+					vertexPool.begin() + batch.vertexStart,
+					vertexPool.begin() + batch.vertexEnd);
+
+				if (ctdbatch->vertexBuffer == 0)
+					glGenBuffers(1, &ctdbatch->vertexBuffer);
+
+				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+				glBufferData(GL_ARRAY_BUFFER, batchSubPool.size() * sizeof(CUSTOMVERTEX), batchSubPool.data(), GL_STATIC_DRAW);
+
+				ctdbatch->vertexes = batchSubPool;
+
+
+
+				glGenVertexArrays(1, &ctdbatch->vao);
+
+				glBindVertexArray(ctdbatch->vao);
+
+				// Rebind VBO/IBO inside VAO scope
+				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
+
+				size_t curOffset = 0;
+				// Position
+				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(0);
+				curOffset += 3 * sizeof(float);
+
+				// Color
+				glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(1);
+				curOffset += 4 * sizeof(byte);
+
+				// UV map
+				glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(2);
+				curOffset += 2 * sizeof(float);
+
+				// Normals
+				glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(3);
+				curOffset += 3 * sizeof(float);
+
+				// Tangents
+				glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(4);
+				curOffset += 4 * sizeof(float);
+
+				// Lightmap UV
+				glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(2);
+				curOffset += 2 * sizeof(float);
+
+				glBindVertexArray(0);
+
+				cmesh->batches.push_back(ctdbatch);
+			}
+
+
+
+
+			displayMeshes.push_back(cmesh);
+		}
+
+
+
+		return;
 	}
 
 	void WmbFileNode::LoadModelWMB3(BinaryReader& reader)
@@ -1896,10 +2209,17 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 			mat.Read(reader);
 			size_t place = reader.Tell();
 			CTDMaterial cmat = CTDMaterial();
-
+			
 			reader.Seek(mat.offsetShaderName);
 			cmat.shader_name = reader.ReadString(16);
 			cmat.shader_name.erase(std::remove(cmat.shader_name.begin(), cmat.shader_name.end(), '\0'), cmat.shader_name.end()); // sanatize
+			reader.Seek(mat.offsetParameters);
+			cmat.materialDataOffset = mat.offsetParameters;
+			for (int j = 0; j < mat.numParameters / 4; j++) {
+				cmat.parameters.push_back({reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat()});
+			}
+
+			
 			reader.Seek(mat.offsetTextures);
 			std::vector<WMBTexture> textureMappings;
 			for (int j = 0; j < mat.numTextures; j++) {
@@ -2224,6 +2544,24 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 }
 	void WmbFileNode::SaveFile() {
+		BinaryWriter* writer = new BinaryWriter(false);
+		writer->WriteBytes(fileData);
+
+		for (CTDMaterial& cmat : materials) {
+			writer->Seek(cmat.materialDataOffset);
+			for (std::array<float, 4>&array : cmat.parameters) {
+				writer->WriteFloat(array[0]);
+				writer->WriteFloat(array[1]);
+				writer->WriteFloat(array[2]);
+				writer->WriteFloat(array[3]);
+			}
+
+		}
+
+
+		fileData = writer->GetData();
+		delete writer;
+
 
 	}
 
@@ -2378,96 +2716,94 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 
 					unsigned int targetShader = 0;
+					if (materials.size() > 0) {
+						if (isSCR) {
+							model = glm::translate(model, glm::vec3(meshOffset.x, meshOffset.y, meshOffset.z));
+							glm::quat rotation = glm::quat(glm::vec3(0.0f, 0.0f, 0.0f));
+							model *= glm::toMat4(rotation);
+							model = glm::scale(model, glm::vec3(scaleOffset.x, scaleOffset.y, scaleOffset.z));
 
-					if (isSCR) {
-						model = glm::translate(model, glm::vec3(meshOffset.x, meshOffset.y, meshOffset.z));
-						glm::quat rotation = glm::quat(glm::vec3(0.0f, 0.0f, 0.0f));
-						model *= glm::toMat4(rotation);
-						model = glm::scale(model, glm::vec3(scaleOffset.x, scaleOffset.y, scaleOffset.z));
+							if (ctx->textureMap.find(materials[batch->materialID].texture_data[0]) != ctx->textureMap.end()) {
+								glDepthMask(GL_TRUE);
+								glDisable(GL_BLEND);
 
-						if (ctx->textureMap.find(materials[batch->materialID].texture_data[0]) != ctx->textureMap.end()) {
-							glDepthMask(GL_TRUE);
-							glDisable(GL_BLEND);
-
-							glUseProgram(ShaderManager::Instance().stageShader);
-							targetShader = ShaderManager::Instance().stageShader;
-							glActiveTexture(GL_TEXTURE0);
-							glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
-							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "diffuseMap"), 0);
-
-							glActiveTexture(GL_TEXTURE1);
-							glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[2]]);
-							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "normalMap"), 1);
-
-							glActiveTexture(GL_TEXTURE2);
-							glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[7]]);
-							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "lightingMap"), 2);
-							
-						}
-						else {
-							targetShader = ShaderManager::Instance().defaultShader;
-							glUseProgram(ShaderManager::Instance().defaultShader);
-							glActiveTexture(GL_TEXTURE0);
-							glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
-						}
-					}
-					else {
-						if (ctx->textureMap.find(materials[batch->materialID].texture_data[0]) != ctx->textureMap.end()) {
-							glDepthMask(GL_TRUE);
-							glDisable(GL_BLEND);
-							
-
-							if (materials[batch->materialID].shader_name == "ois02_sbxeX" || materials[batch->materialID].shader_name == "ois02_xbceX" || materials[batch->materialID].shader_name == "ois02_sbceX") {
-								glUseProgram(ShaderManager::Instance().decalShader);
-								targetShader = ShaderManager::Instance().decalShader;
+								glUseProgram(ShaderManager::Instance().stageShader);
+								targetShader = ShaderManager::Instance().stageShader;
 								glActiveTexture(GL_TEXTURE0);
 								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
-								glUniform1i(glGetUniformLocation(ShaderManager::Instance().decalShader, "diffuseMap"), 0);
-								glEnable(GL_BLEND);
-								glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-							}
-							else if (materials[batch->materialID].shader_name.find("skn") != std::string::npos) {
-								glUseProgram(ShaderManager::Instance().skinShader);
-								targetShader = ShaderManager::Instance().skinShader;
-								glActiveTexture(GL_TEXTURE0);
-								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
-								glUniform1i(glGetUniformLocation(ShaderManager::Instance().skinShader, "diffuseMap"), 0);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "diffuseMap"), 0);
 
 								glActiveTexture(GL_TEXTURE1);
 								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[2]]);
-								glUniform1i(glGetUniformLocation(ShaderManager::Instance().skinShader, "normalMap"), 1);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "normalMap"), 1);
+
+								glActiveTexture(GL_TEXTURE2);
+								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[7]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "lightingMap"), 2);
+
 							}
 							else {
-								glUseProgram(ShaderManager::Instance().defaultShader);
 								targetShader = ShaderManager::Instance().defaultShader;
+								glUseProgram(ShaderManager::Instance().defaultShader);
 								glActiveTexture(GL_TEXTURE0);
-								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
 								glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
-
-								glActiveTexture(GL_TEXTURE1);
-								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[2]]);
-								glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "normalMap"), 1);
-
-
 							}
 						}
 						else {
-							targetShader = ShaderManager::Instance().defaultShader;
-							glUseProgram(ShaderManager::Instance().defaultShader);
-							glActiveTexture(GL_TEXTURE0);
-							glBindTexture(GL_TEXTURE_2D, ctx->textureMap[0]);
-							glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+							if (ctx->textureMap.find(materials[batch->materialID].texture_data[0]) != ctx->textureMap.end()) {
+								glDepthMask(GL_TRUE);
+								glDisable(GL_BLEND);
+
+
+								if (materials[batch->materialID].shader_name == "ois02_sbxeX" || materials[batch->materialID].shader_name == "ois02_xbceX" || materials[batch->materialID].shader_name == "ois02_sbceX" || materials[batch->materialID].shader_name == "siv23_sbxxx" || materials[batch->materialID].shader_name == "sis23_xbxex" || materials[batch->materialID].shader_name == "ois01_xbxeX") {
+									glUseProgram(ShaderManager::Instance().decalShader);
+									targetShader = ShaderManager::Instance().decalShader;
+									glActiveTexture(GL_TEXTURE0);
+									glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
+									glUniform1i(glGetUniformLocation(ShaderManager::Instance().decalShader, "diffuseMap"), 0);
+									glEnable(GL_BLEND);
+									glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+								}
+								else if (materials[batch->materialID].shader_name.find("skn") != std::string::npos) {
+									glUseProgram(ShaderManager::Instance().skinShader);
+									targetShader = ShaderManager::Instance().skinShader;
+									glActiveTexture(GL_TEXTURE0);
+									glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
+									glUniform1i(glGetUniformLocation(ShaderManager::Instance().skinShader, "diffuseMap"), 0);
+
+									glActiveTexture(GL_TEXTURE1);
+									glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[2]]);
+									glUniform1i(glGetUniformLocation(ShaderManager::Instance().skinShader, "normalMap"), 1);
+								}
+								else {
+									glUseProgram(ShaderManager::Instance().defaultShader);
+									targetShader = ShaderManager::Instance().defaultShader;
+									glActiveTexture(GL_TEXTURE0);
+									glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
+									glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+
+									glActiveTexture(GL_TEXTURE1);
+									glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[2]]);
+									glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "normalMap"), 1);
+
+
+								}
+							}
+							else {
+								targetShader = ShaderManager::Instance().defaultShader;
+								glUseProgram(ShaderManager::Instance().defaultShader);
+								glActiveTexture(GL_TEXTURE0);
+								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[0]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+							}
 						}
 					}
-
-
-
 
 
 					glUniformMatrix4fv(glGetUniformLocation(targetShader, "model"), 1, GL_FALSE, glm::value_ptr(model));
 					glUniformMatrix4fv(glGetUniformLocation(targetShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
 					glUniformMatrix4fv(glGetUniformLocation(targetShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-					glm::vec3 lightDir = glm::normalize(glm::vec3(0, -1.0f, -1.0f)); // example light direction
+					glm::vec3 lightDir = glm::normalize(glm::vec3(0, -1.0f, -1.0f));
 					glUniform3fv(glGetUniformLocation(targetShader, "lightDir"), 1, glm::value_ptr(lightDir));
 					glUniform3fv(glGetUniformLocation(targetShader, "viewPos"), 1, glm::value_ptr(viewPos));
 
@@ -2478,7 +2814,34 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 					
 
-					glDrawElements(GL_TRIANGLES, batch->indexCount, GL_UNSIGNED_SHORT, 0);
+					glDrawElements(batch->drawMethod, batch->indexCount, GL_UNSIGNED_SHORT, 0);
+
+					if (materials.size() > 0) {
+						if (materials[batch->materialID].highlight) {
+							targetShader = ShaderManager::Instance().outlineShader;
+							glUseProgram(ShaderManager::Instance().outlineShader);
+							glEnable(GL_CULL_FACE);
+							glCullFace(GL_FRONT);
+
+							glUniformMatrix4fv(glGetUniformLocation(targetShader, "model"), 1, GL_FALSE, glm::value_ptr(model));
+							glUniformMatrix4fv(glGetUniformLocation(targetShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+							glUniformMatrix4fv(glGetUniformLocation(targetShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+							glUniform3fv(glGetUniformLocation(targetShader, "lightDir"), 1, glm::value_ptr(lightDir));
+							glUniform3fv(glGetUniformLocation(targetShader, "viewPos"), 1, glm::value_ptr(viewPos));
+
+							glBindVertexArray(batch->vao);
+
+							glBindBuffer(GL_ARRAY_BUFFER, batch->vertexBuffer);
+							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch->indexBuffer);
+
+							glDrawElements(batch->drawMethod, batch->indexCount, GL_UNSIGNED_SHORT, 0);
+
+							glCullFace(GL_BACK);
+							glDisable(GL_CULL_FACE);
+						}
+					}
+
+
 
 				}
 
@@ -2542,6 +2905,144 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		drawData.Valid = true;
 
 		ImGui_ImplOpenGL3_RenderDrawData(&drawData);
+	}
+
+	void WmbFileNode::RenderPreviewMesh(CruelerContext* ctx)
+	{
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		for (CruelerMesh* mesh : displayMeshes) {
+			if (mesh->visibility) {
+				for (CruelerBatch* batch : mesh->batches) {
+					if (!batch->isValid) continue;
+
+					glm::mat4 model = glm::mat4(1.0f);
+					glm::vec3 camPos = glm::vec3(0.0f, 0.0f, 1.0f);
+					glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);  
+					glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f); 
+
+					glm::mat4 view = glm::lookAt(camPos, target, up);
+
+
+					float fov = glm::radians(45.0f);
+					float aspectRatio = 1.0f; 
+					float nearPlane = 0.1f;
+					float farPlane = 100.0f;
+
+					glm::mat4 projection = glm::perspective(fov, aspectRatio, nearPlane, farPlane);
+					glm::vec3 viewPos(0.0f, 0.0f, 10.0f);
+					glm::vec3 lightPos(10.0f, 10.0f, 10.0f);
+
+
+					unsigned int targetShader = 0;
+
+					if (isSCR) {
+						model = glm::translate(model, glm::vec3(meshOffset.x, meshOffset.y, meshOffset.z));
+						glm::quat rotation = glm::quat(glm::vec3(0.0f, 0.0f, 0.0f));
+						model *= glm::toMat4(rotation);
+						model = glm::scale(model, glm::vec3(scaleOffset.x, scaleOffset.y, scaleOffset.z));
+
+						if (ctx->textureMap.find(materials[batch->materialID].texture_data[0]) != ctx->textureMap.end()) {
+							glDepthMask(GL_TRUE);
+							glDisable(GL_BLEND);
+
+							glUseProgram(ShaderManager::Instance().stageShader);
+							targetShader = ShaderManager::Instance().stageShader;
+							glActiveTexture(GL_TEXTURE0);
+							glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "diffuseMap"), 0);
+
+							glActiveTexture(GL_TEXTURE1);
+							glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[2]]);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "normalMap"), 1);
+
+							glActiveTexture(GL_TEXTURE2);
+							glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[7]]);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().stageShader, "lightingMap"), 2);
+
+						}
+						else {
+							targetShader = ShaderManager::Instance().defaultShader;
+							glUseProgram(ShaderManager::Instance().defaultShader);
+							glActiveTexture(GL_TEXTURE0);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+						}
+					}
+					else {
+						if (ctx->textureMap.find(materials[batch->materialID].texture_data[0]) != ctx->textureMap.end()) {
+							glDepthMask(GL_TRUE);
+							glDisable(GL_BLEND);
+
+
+							if (materials[batch->materialID].shader_name == "ois02_sbxeX" || materials[batch->materialID].shader_name == "ois02_xbceX" || materials[batch->materialID].shader_name == "ois02_sbceX" || materials[batch->materialID].shader_name == "siv23_sbxxx" || materials[batch->materialID].shader_name == "sis23_xbxex" || materials[batch->materialID].shader_name == "ois01_xbxeX") {
+								glUseProgram(ShaderManager::Instance().decalShader);
+								targetShader = ShaderManager::Instance().decalShader;
+								glActiveTexture(GL_TEXTURE0);
+								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().decalShader, "diffuseMap"), 0);
+								glEnable(GL_BLEND);
+								glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+							}
+							else if (materials[batch->materialID].shader_name.find("skn") != std::string::npos) {
+								glUseProgram(ShaderManager::Instance().skinShader);
+								targetShader = ShaderManager::Instance().skinShader;
+								glActiveTexture(GL_TEXTURE0);
+								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().skinShader, "diffuseMap"), 0);
+
+								glActiveTexture(GL_TEXTURE1);
+								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[2]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().skinShader, "normalMap"), 1);
+							}
+							else {
+								glUseProgram(ShaderManager::Instance().defaultShader);
+								targetShader = ShaderManager::Instance().defaultShader;
+								glActiveTexture(GL_TEXTURE0);
+								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[0]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+
+								glActiveTexture(GL_TEXTURE1);
+								glBindTexture(GL_TEXTURE_2D, ctx->textureMap[materials[batch->materialID].texture_data[2]]);
+								glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "normalMap"), 1);
+
+
+							}
+						}
+						else {
+							targetShader = ShaderManager::Instance().defaultShader;
+							glUseProgram(ShaderManager::Instance().defaultShader);
+							glActiveTexture(GL_TEXTURE0);
+							glBindTexture(GL_TEXTURE_2D, ctx->textureMap[0]);
+							glUniform1i(glGetUniformLocation(ShaderManager::Instance().defaultShader, "diffuseMap"), 0);
+						}
+					}
+
+
+
+
+
+					glUniformMatrix4fv(glGetUniformLocation(targetShader, "model"), 1, GL_FALSE, glm::value_ptr(model));
+					glUniformMatrix4fv(glGetUniformLocation(targetShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+					glUniformMatrix4fv(glGetUniformLocation(targetShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+					glm::vec3 lightDir = glm::normalize(glm::vec3(0, -1.0f, -1.0f)); 
+					glUniform3fv(glGetUniformLocation(targetShader, "lightDir"), 1, glm::value_ptr(lightDir));
+					glUniform3fv(glGetUniformLocation(targetShader, "viewPos"), 1, glm::value_ptr(viewPos));
+
+					glBindVertexArray(batch->vao);
+
+					glBindBuffer(GL_ARRAY_BUFFER, batch->vertexBuffer);
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch->indexBuffer);
+
+
+
+					glDrawElements(GL_TRIANGLES, batch->indexCount, GL_UNSIGNED_SHORT, 0);
+
+				}
+
+			}
+
+
+
+		}
 	}
 
 	void WmbFileNode::RemoveCuttingDataWMB4()
@@ -3396,4 +3897,398 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 
 	void TrgFileNode::SaveFile()
 	{
+	}
+
+	EstFileNode::EstFileNode(std::string fName) : FileNode(fName) {
+		fileIcon = ICON_CI_STAR;
+		nodeType = EST;
+		fileFilter = L"Effect Files (*.est)\0*.est;\0";
+	}
+
+	void EstFileNode::LoadFile()
+	{
+		BinaryReader reader(fileData, true);
+		reader.SetEndianess(fileIsBigEndian);
+		reader.Seek(0x4);
+		uint32_t recordCount = reader.ReadUINT32();
+		uint32_t recordOffsetTable = reader.ReadUINT32();
+		uint32_t typeOffset = reader.ReadUINT32();
+		uint32_t typeEndOffset = reader.ReadUINT32();
+		uint32_t typeSize = reader.ReadUINT32();
+		uint32_t typeNumber = reader.ReadUINT32();
+
+		reader.Seek(recordOffsetTable);
+		std::vector<uint32_t> offsets = reader.ReadUINT32Array(recordCount);
+
+		reader.Seek(typeOffset);
+		for (int x = 0; x < recordCount; x++) {
+			EstRecord rec = EstRecord();
+			for (int y = 0; y < typeNumber; y++) {
+				
+				reader.ReadUINT32();
+				EstItem* item = nullptr;
+
+				std::string type = reader.ReadString(4);
+				if (fileIsBigEndian) std::reverse(type.begin(), type.end());
+				
+
+				uint32_t dataSize = reader.ReadUINT32();
+				uint32_t dataOffset = reader.ReadUINT32();
+
+				if (type == "MOVE") item = new EstMove();
+				else if (type == "PART") item = new EstPart();
+				else if (type == "EMIF") item = new EstEmif();
+				else if (type == "TEX ") item = new EstTex();
+				else if (type == "SZSA") item = new EstSzsa();
+				else if (type == "PSSA") item = new EstPssa();
+				else if (type == "RTSA") item = new EstRtsa();
+				else if (type == "FVWK") item = new EstFvwk();
+				else if (type == "FWK ") item = new EstFwk();
+				else if (type == "EMMV") item = new EstEmmv();
+				else if (type == "EMSA") item = new EstEmsa();
+				else if (type == "EMFV") item = new EstEmfv();
+				else if (type == "EMPA") item = new EstEmpa();
+				else if (type == "EMRA") item = new EstEmra();
+				else if (type == "EMVF") item = new EstEmvf();
+				else if (type == "EMFW") item = new EstEmfw();
+				else if (type == "MJSG") item = new EstMjsg();
+				else if (type == "MJCM") item = new EstMjcm();
+				else if (type == "MJNM") item = new EstMjnm();
+				else if (type == "MJMM") item = new EstMjmm();
+				else if (type == "MJDT") item = new EstMjdt();
+				else if (type == "MJFN") item = new EstMjfn();
+				else if (type == "MJVA") item = new EstMjva();
+				else {
+					CTDLog::Log::getInstance().LogError("Unknown EST Type! (" + type + ")");
+					item = new EstItem();
+					item->isValid = false;
+				}
+
+				if (dataSize == 0 || dataOffset == 0) {
+					item->isValid = false;
+				}
+				else {
+					uint32_t nextRecordPosition = reader.Tell();
+					reader.Seek(offsets[x] + dataOffset);
+
+
+					item->Read(reader);
+
+					reader.Seek(nextRecordPosition);
+				}
+				rec.types.push_back(item);
+			}
+
+			records.push_back(rec);
+		}
+
+		return;
+	}
+
+	void EstFileNode::RenderGUI(CruelerContext* ctx)
+	{
+		if (records.size() == 0) {
+			ImGui::Text("There are no records in this EST.");
+		}
+
+		int i = 0;
+		for (EstRecord& rec : records) {
+			ImGui::SeparatorText(("Record " + std::to_string(i)).c_str());
+			for (EstItem* item : rec.types) {
+				if (item->isValid) {
+					
+					ImGui::PushID(i);
+					ImGui::Checkbox(("###" + std::to_string(item->type)).c_str(), &item->shouldRepack);
+					ImGui::SameLine();
+					if (ImGui::TreeNode((EstItemTypeToString.at(item->type)).c_str())) {
+						item->Draw();
+
+						ImGui::TreePop();
+
+					}
+					
+
+					ImGui::PopID();
+				}
+				
+			}
+
+			i += 1;
+		}
+	}
+
+	void EstFileNode::SaveFile()
+	{
+	}
+
+	BayoEffNode::BayoEffNode(std::string fName) : FileNode(fName)
+	{
+		fileIcon = ICON_CI_FOLDER;
+		TextColor = { 0.0f, 0.98f, 0.467f, 1.0f };
+		nodeType = B1EFF;
+		fileFilter = L"Platinum Effect Container(*.eff)\0*.eff;\0";
+	}
+
+	void BayoEffNode::LoadFile()
+	{
+		BinaryReader reader(fileData, true);
+		reader.SetEndianess(fileIsBigEndian);
+		reader.Seek(0x4);
+		uint32_t dataNumber = reader.ReadUINT32();
+
+		struct BayoEffDataInfo {
+			int32_t index;
+			uint32_t offset;
+		};
+
+		std::vector<BayoEffDataInfo> infos;
+
+		for (uint32_t i = 0; i < dataNumber; i++) {
+			BayoEffDataInfo datInfo;
+			datInfo.index = reader.ReadINT32();
+			datInfo.offset = reader.ReadUINT32();
+			infos.push_back(datInfo);
+		}
+
+		for (BayoEffDataInfo info : infos) {
+			reader.Seek(info.offset);
+			std::string name = reader.ReadString(4) + ".est";
+			uint32_t recordNumber = reader.ReadUINT32();
+			FileNode* childNode = HelperFunction::LoadNode(name, reader.ReadBytes(0), fileIsBigEndian, fileIsBigEndian);
+			childNode->parent = this;
+			if (childNode) {
+				children.push_back(childNode);
+			}
+		}
+
+
+	}
+
+	void BayoEffNode::SaveFile()
+	{
+	}
+
+	BayoClpClhClwFileNode::BayoClpClhClwFileNode(std::string fName) : FileNode(fName)
+	{
+		fileIcon = ICON_CI_TYPE_HIERARCHY;
+		TextColor = { 0, 1, 0.722, 1.0f };
+		nodeType = B1PHYS;
+		fileFilter = L"Platinum Physics (*.*)\0*.*;\0";
+	}
+
+	void BayoClpClhClwFileNode::LoadFile()
+	{
+		BinaryReader reader(fileData, true);
+		reader.SetEndianess(fileIsBigEndian);
+		if (type == B1_CLP) {
+			fileFilter = L"Platinum CLP (*.clp)\0*.clp;\0";
+			clpHeader = Bayo1ClpHeader();
+			clpHeader.m_Num = reader.ReadUINT32();
+			clpHeader.m_LimitSpringRate = reader.ReadFloat();
+			clpHeader.m_SpdRate = reader.ReadFloat();
+			clpHeader.m_Stretchy = reader.ReadFloat();
+			clpHeader.m_BundleNum = reader.ReadUINT16();
+			clpHeader.m_BundleNum2 = reader.ReadUINT16();
+			clpHeader.m_Thick = reader.ReadFloat();
+			clpHeader.m_gravityVec.x = reader.ReadFloat();
+			clpHeader.m_gravityVec.y = reader.ReadFloat();
+			clpHeader.m_gravityVec.z = reader.ReadFloat();
+			clpHeader.m_GravityPartsNo = reader.ReadUINT32();
+			clpHeader.m_FirstBundleRate = reader.ReadUINT32();
+			clpHeader.m_WindVec.x = reader.ReadFloat();
+			clpHeader.m_WindVec.y = reader.ReadFloat();
+			clpHeader.m_WindVec.z = reader.ReadFloat();
+			clpHeader.m_WindPartsNo = reader.ReadUINT32();
+			clpHeader.m_WindOffset.x = reader.ReadFloat();
+			clpHeader.m_WindOffset.y = reader.ReadFloat();
+			clpHeader.m_WindOffset.z = reader.ReadFloat();
+			clpHeader.m_WindSin = reader.ReadFloat();
+			clpHeader.m_HitAdjustRate = reader.ReadFloat();
+
+			for (uint32_t i = 0; i < clpHeader.m_Num; i++) {
+				Bayo1ClpUnit unit = Bayo1ClpUnit();
+				unit.no = reader.ReadINT16();
+				unit.noUp = reader.ReadINT16();
+				unit.noDown = reader.ReadINT16();
+				unit.noSide = reader.ReadINT16();
+				unit.noPoly = reader.ReadINT16();
+				unit.noFix = reader.ReadINT16();
+				unit.rotLimit = reader.ReadFloat();
+				unit.offset.x = reader.ReadFloat();
+				unit.offset.y = reader.ReadFloat();
+				unit.offset.z = reader.ReadFloat();
+				clpHeader.works.push_back(unit);
+			}
+
+		}
+	}
+
+	void BayoClpClhClwFileNode::SaveFile()
+	{
+	}
+
+	void BayoClpClhClwFileNode::RenderGUI(CruelerContext* ctx)
+	{
+		if (type == B1_CLP) {
+			if (ImGui::BeginTabBar("clp")) {
+				if (ImGui::BeginTabItem("Header")) {
+					ImGui::InputFloat("Limit Spring Rate", &clpHeader.m_LimitSpringRate);
+					ImGui::InputFloat("Speed Rate", &clpHeader.m_SpdRate);
+					ImGui::InputFloat("Stretchy", &clpHeader.m_Stretchy);
+					ImGui::InputInt("Bundle Number", &clpHeader.m_BundleNum);
+					ImGui::InputInt("Bundle Number 2", &clpHeader.m_BundleNum2);
+					ImGui::InputFloat("Thick", &clpHeader.m_Thick);
+					ImGui::InputFloat3("Gravity Vector", clpHeader.m_gravityVec);
+					ImGui::InputInt("Gravity Parts Number", &clpHeader.m_GravityPartsNo);
+					ImGui::InputFloat("First Bundle Rate", &clpHeader.m_FirstBundleRate);
+					ImGui::InputFloat3("Wind Vector", clpHeader.m_WindVec);
+					ImGui::InputInt("Wind Parts Number", &clpHeader.m_WindPartsNo);
+					ImGui::InputFloat3("Wind Offset", clpHeader.m_WindOffset);
+					ImGui::InputFloat("Wind Sine", &clpHeader.m_WindSin);
+					ImGui::InputFloat("Hit Adjust Rate", &clpHeader.m_HitAdjustRate);
+
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("Works")) {
+					if (ImGui::Button("Export CSV")) {
+						OPENFILENAME ofn;
+						wchar_t szFile[260] = { 0 };
+						LPWSTR pFile = szFile;
+						std::string csvName = fileName + ".csv";
+						mbstowcs_s(0, pFile, csvName.length() + 1, csvName.c_str(), _TRUNCATE);
+
+						ZeroMemory(&ofn, sizeof(OPENFILENAME));
+
+						ofn.lpstrFile = pFile;
+						ofn.lStructSize = sizeof(OPENFILENAME);
+						ofn.hwndOwner = NULL;
+						ofn.nMaxFile = 260;
+						ofn.lpstrFilter = L"CSV Table (*.csv)\0*.csv;\0";
+
+						ofn.nFilterIndex = 1;
+						ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+						if (GetSaveFileName(&ofn) == TRUE) {
+							std::ofstream outputFile(ofn.lpstrFile); // Open in binary mode!
+							if (outputFile.is_open()) {
+								outputFile << "no,noUp,noDown,noSide,noPoly,noFix,rotLimit,offset\n";
+								for (Bayo1ClpUnit& unit : clpHeader.works) {
+									outputFile << std::to_string(unit.no) + ",";
+									outputFile << std::to_string(unit.noUp) + ",";
+									outputFile << std::to_string(unit.noDown) + ",";
+									outputFile << std::to_string(unit.noSide) + ",";
+									outputFile << std::to_string(unit.noPoly) + ",";
+									outputFile << std::to_string(unit.noFix) + ",";
+									outputFile << std::to_string(unit.rotLimit) + ",";
+									outputFile << std::to_string(unit.offset.x) + " " + std::to_string(unit.offset.y) + " " + std::to_string(unit.offset.z) + "\n";
+								}
+								
+							}
+
+						}
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Import CSV")) {
+						OPENFILENAME ofn;
+						wchar_t szFile[260] = { 0 };
+						LPWSTR pFile = szFile;
+
+						mbstowcs_s(0, pFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
+
+						ZeroMemory(&ofn, sizeof(OPENFILENAME));
+
+						ofn.lpstrFile = pFile;
+						ofn.lStructSize = sizeof(OPENFILENAME);
+						ofn.hwndOwner = NULL;
+						ofn.nMaxFile = 260;
+						ofn.lpstrFilter = L"CSV Table (*.csv)\0*.csv;\0";
+
+						ofn.nFilterIndex = 1;
+						ofn.Flags = OFN_PATHMUSTEXIST;
+
+						if (GetOpenFileName(&ofn) == TRUE) {
+							std::ifstream file(ofn.lpstrFile);
+							if (file.is_open()) {
+								std::vector<Bayo1ClpUnit> units;
+								std::string line;
+								std::getline(file, line); // HDR Skip
+
+								while (std::getline(file, line)) {
+									std::stringstream ss(line);
+									std::string token;
+
+									Bayo1ClpUnit unit;
+
+									std::getline(ss, token, ','); unit.no = std::stoi(token);
+									std::getline(ss, token, ','); unit.noUp = std::stoi(token);
+									std::getline(ss, token, ','); unit.noDown = std::stoi(token);
+									std::getline(ss, token, ','); unit.noSide = std::stoi(token);
+									std::getline(ss, token, ','); unit.noPoly = std::stoi(token);
+									std::getline(ss, token, ','); unit.noFix = std::stoi(token);
+									std::getline(ss, token, ','); unit.rotLimit = std::stof(token);
+
+									std::getline(ss, token, ',');
+									std::stringstream offsetStream(token);
+									offsetStream >> unit.offset.x >> unit.offset.y >> unit.offset.z;
+
+									units.push_back(unit);
+								}
+
+								clpHeader.works = units;
+
+							}
+						}
+					}
+
+
+					ImGui::BeginTable("clp_works", 8);
+					ImGui::TableSetupColumn("no");
+					ImGui::TableSetupColumn("noUp");
+					ImGui::TableSetupColumn("noDown");
+					ImGui::TableSetupColumn("noSide");
+					ImGui::TableSetupColumn("noPoly");
+					ImGui::TableSetupColumn("noFix");
+					ImGui::TableSetupColumn("rotLimit");
+					ImGui::TableSetupColumn("offset");
+					ImGui::TableHeadersRow();
+
+					for (int i = 0; i < clpHeader.works.size(); i++) {
+						ImGui::TableNextRow();
+
+
+						//ImGui::SeparatorText(("Work " + std::to_string(i)).c_str());
+						ImGui::PushID(i);
+						ImGui::TableSetColumnIndex(0);
+						ImGui::InputInt("###No", &clpHeader.works[i].no, 0);
+						ImGui::TableSetColumnIndex(1);
+						ImGui::InputInt("###NoUp", &clpHeader.works[i].noUp, 0);
+						ImGui::TableSetColumnIndex(2);
+						ImGui::InputInt("###NoDown", &clpHeader.works[i].noDown, 0);
+						ImGui::TableSetColumnIndex(3);
+						ImGui::InputInt("###NoSide", &clpHeader.works[i].noSide, 0);
+						ImGui::TableSetColumnIndex(4);
+						ImGui::InputInt("###NoPoly", &clpHeader.works[i].noPoly, 0);
+						ImGui::TableSetColumnIndex(5);
+						ImGui::InputInt("###NoFix", &clpHeader.works[i].noFix, 0);
+						ImGui::TableSetColumnIndex(6);
+						ImGui::InputFloat("###Rotation Limit", &clpHeader.works[i].rotLimit);
+						ImGui::TableSetColumnIndex(7);
+						ImGui::InputFloat3("###Offset", clpHeader.works[i].offset);
+						ImGui::PopID();
+
+					}
+
+					ImGui::EndTable();
+
+					if (ImGui::Button("+")) {
+						clpHeader.works.push_back(Bayo1ClpUnit());
+					}
+
+					ImGui::EndTabItem();
+				}
+				ImGui::EndTabBar();
+			}
+
+		}
+
 	}

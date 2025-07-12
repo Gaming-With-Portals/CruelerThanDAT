@@ -128,7 +128,10 @@ enum FileNodeTypes {
 	LY2,
 	UID,
 	UVD,
-	TRG
+	TRG,
+	EST,
+	B1EFF,
+	B1PHYS
 };
 
 enum TextureStorageMode {
@@ -256,6 +259,263 @@ public:
 	void SaveFile() override;
 };
 
+enum EstItemType {
+	NONE,
+	MOVE,
+	PART,
+	EMIF,
+	TEX,
+	SZSA,
+	PSSA,
+	RTSA,
+	FVWK,
+	FWK,
+	EMMV,
+	EMSA,
+	EMPA,
+	EMRA,
+	EMVF,
+	EMFW,
+	EMFV,
+	MJSG,
+	MJNM,
+	MJMM,
+	MJDT,
+	MJFN,
+	MJCM,
+	MJVA
+};
+
+
+
+const std::map<EstItemType, std::string> EstItemTypeToString = {
+	{ NONE, "????" },
+	{ MOVE, "MOVE" },
+	{ PART, "PART" },
+	{ EMIF, "EMIF" },
+	{ TEX, "TEX" },
+	{ SZSA, "SZSA" },
+	{ PSSA, "PSSA" },
+	{ RTSA, "RTSA" },
+	{ FVWK, "FVWK" },
+	{ FWK, "FWK" },
+	{ EMMV, "EMMV" },
+	{ EMSA, "EMSA" },
+	{ EMPA, "EMPA" },
+	{ EMRA, "EMRA" },
+	{ EMVF, "EMVF" },
+	{ EMFW, "EMFW" },
+	{ EMFV, "EMFV" },
+	{ MJSG, "MJSG" },
+	{ MJNM, "MJNM" },
+	{ MJMM, "MJMM" },
+	{ MJDT, "MJDT" },
+	{ MJFN, "MJFN" },
+	{ MJCM, "MJCM" },
+	{ MJVA, "MJVA" }
+};
+
+struct EstItem {
+	EstItemType type = NONE;
+	bool isValid = true;
+	bool shouldRepack = true;
+	virtual void Read(BinaryReader& br) {}
+	virtual void Draw() {}
+
+	virtual ~EstItem() = default;
+};
+
+struct EstMove : EstItem {
+	EstMove() { type = MOVE; }
+
+	uint32_t u_a;
+	MGRVector offset;
+	float unk_1;
+	float top_pos_1;
+	float right_pos_1;
+	MGRVector move_speed;
+	MGRVector move_small_speed;
+	std::vector<float> u_1; // 6
+	float angle;
+	std::vector<float> u_2; // 13
+	float scale;
+	std::vector<float> u_3; // 16
+	MGRColor color;
+	std::vector<float> u_4; // 4
+	uint16_t unk_2;
+	uint16_t smooth_appearance;
+	MGRColor effect_size_limit;
+	float smooth_disappear;
+	std::vector<float> u_5; // 32
+
+	void Read(BinaryReader& br) override {
+		u_a = br.ReadUINT32();
+		offset.x = br.ReadFloat();
+		offset.y = br.ReadFloat();
+		offset.z = br.ReadFloat();
+		unk_1 = br.ReadFloat();
+		top_pos_1 = br.ReadFloat();
+		right_pos_1 = br.ReadFloat();
+		move_speed.x = br.ReadFloat();
+		move_speed.y = br.ReadFloat();
+		move_speed.z = br.ReadFloat();
+		move_small_speed.x = br.ReadFloat();
+		move_small_speed.y = br.ReadFloat();
+		move_small_speed.z = br.ReadFloat();
+		u_1 = br.ReadFloatArray(6);
+		angle = br.ReadFloat();
+		u_2 = br.ReadFloatArray(13);
+		scale = br.ReadFloat();
+		u_3 = br.ReadFloatArray(16);
+		color.r = br.ReadFloat();
+		color.g = br.ReadFloat();
+		color.b = br.ReadFloat();
+		color.a = br.ReadFloat();
+		u_4 = br.ReadFloatArray(4);
+		unk_2 = br.ReadUINT16();
+		smooth_appearance = br.ReadUINT16();
+		effect_size_limit.r = br.ReadFloat();
+		effect_size_limit.g = br.ReadFloat();
+		effect_size_limit.b = br.ReadFloat();
+		effect_size_limit.a = br.ReadFloat();
+		smooth_disappear = br.ReadFloat();
+		u_5 = br.ReadFloatArray(32);
+	}
+
+	void Draw() override {
+		ImGui::InputFloat3("Offset", offset);
+		ImGui::InputFloat3("Move Speed", move_speed);
+		ImGui::InputFloat3("Move Small Speed", move_small_speed);
+		ImGui::InputFloat("Rotation", &angle);
+		ImGui::InputFloat("Scale", &scale);
+		ImGui::ColorEdit4("Color", color);
+		ImGui::InputFloat4("Effect Size Limit", effect_size_limit);
+	}
+
+};
+
+struct EstPart : EstItem {
+	EstPart() { type = PART; }
+
+	int16_t anchorBone;
+	int16_t u_b;
+	uint32_t u_c;
+	uint32_t u_d;
+	std::vector<uint16_t> u_1; // 8
+	std::vector<uint32_t> u_2; // 9
+
+	void Read(BinaryReader& br) override {
+		anchorBone = br.ReadINT16();
+		u_b = br.ReadINT16();
+		u_c = br.ReadUINT32();
+		u_d = br.ReadUINT32();
+		u_1 = br.ReadUINT16Array(8);
+		u_2 = br.ReadUINT32Array(9);
+	}
+};
+
+struct EstEmif : EstItem {
+	EstEmif() { type = EMIF; }
+};
+
+struct EstTex : EstItem {
+	EstTex() { type = TEX; }
+};
+
+struct EstSzsa : EstItem {
+	EstSzsa() { type = SZSA; }
+};
+
+struct EstPssa : EstItem {
+	EstPssa() { type = PSSA; }
+};
+
+struct EstRtsa : EstItem {
+	EstRtsa() { type = RTSA; }
+};
+
+struct EstFvwk : EstItem {
+	EstFvwk() { type = FVWK; }
+};
+
+struct EstFwk : EstItem {
+	EstFwk() { type = FWK; }
+};
+
+struct EstEmmv : EstItem {
+	EstEmmv() { type = EMMV; }
+};
+
+struct EstEmsa : EstItem {
+	EstEmsa() { type = EMSA; }
+};
+
+struct EstEmpa : EstItem {
+	EstEmpa() { type = EMPA; }
+};
+
+struct EstEmra : EstItem {
+	EstEmra() { type = EMRA; }
+};
+
+struct EstEmvf : EstItem {
+	EstEmvf() { type = EMVF; }
+};
+
+struct EstEmfv : EstItem {
+	EstEmfv() { type = EMFV; }
+};
+
+struct EstEmfw : EstItem {
+	EstEmfw() { type = EMFW; }
+};
+
+struct EstMjsg : EstItem {
+	EstMjsg() { type = MJSG; }
+};
+
+struct EstMjcm : EstItem {
+	EstMjcm() { type = MJCM; }
+};
+
+struct EstMjnm : EstItem {
+	EstMjnm() { type = MJNM; }
+};
+
+struct EstMjmm : EstItem {
+	EstMjmm() { type = MJMM; }
+};
+
+struct EstMjdt : EstItem {
+	EstMjdt() { type = MJDT; }
+};
+
+struct EstMjfn : EstItem {
+	EstMjfn() { type = MJFN; }
+};
+
+struct EstMjva : EstItem {
+	EstMjva() { type = MJVA; }
+};
+
+
+struct EstRecord {
+	std::vector<EstItem*> types;
+};
+
+class EstFileNode : public FileNode {
+public:
+	std::vector<EstRecord> records;
+
+	EstFileNode(std::string fName);
+	void LoadFile() override;
+
+	void RenderGUI(CruelerContext* ctx);
+
+	void SaveFile() override;
+};
+
+
 class UidFileNode : public FileNode {
 public:
 	UIDHeader uidHeader;
@@ -368,6 +628,7 @@ public:
 	int indexCount;
 	int vertexCount;
 	int materialID;
+	unsigned int drawMethod = GL_TRIANGLES;
 };
 
 
@@ -386,7 +647,8 @@ public:
 enum WmbVersionFormat {
 	WMB4_MGRR,
 	WMB3_BAY3,
-	WMB0_BAY1
+	WMB0_BAY1,
+	WMB0_BAY2
 };
 
 class TrgFileNode : public FileNode {
@@ -434,6 +696,7 @@ public:
 	void PopupOptions(CruelerContext *ctx) override;
 
 	void RenderMesh(CruelerContext *ctx);
+	void RenderPreviewMesh(CruelerContext* ctx);
 
 	void RemoveCuttingDataWMB4();
 
@@ -538,4 +801,67 @@ public:
 
 
 	void SaveFile() override;
+};
+
+class BayoEffNode : public FileNode {
+public:
+	BayoEffNode(std::string fName);
+
+	void LoadFile() override;
+	void SaveFile() override;
+
+};
+
+enum BayoPhysicsFileType {
+	B1_CLP,
+	B1_CLH,
+	B1_CLW,
+	B1_NONE
+};
+
+struct Bayo1ClpUnit {
+	int no = 0;
+	int noUp = 0;
+	int noDown = 0;
+	int noSide = 0;
+	int noPoly = 0;
+	int noFix = 0;
+	float rotLimit = 0;
+	MGRVector offset = { 0, 0, 0 };
+};
+
+struct Bayo1ClpHeader {
+	std::vector<Bayo1ClpUnit> works;
+
+	uint32_t m_Num;
+	float m_LimitSpringRate;
+	float m_SpdRate;
+	float m_Stretchy;
+	int m_BundleNum;
+	int m_BundleNum2;
+	float m_Thick;
+	MGRVector m_gravityVec;
+	int m_GravityPartsNo;
+	float m_FirstBundleRate;
+	MGRVector m_WindVec;
+	int m_WindPartsNo;
+	MGRVector m_WindOffset;
+	float m_WindSin;
+	float m_HitAdjustRate;
+};
+
+
+class BayoClpClhClwFileNode : public FileNode {
+public:
+	BayoPhysicsFileType type = B1_NONE;
+
+	Bayo1ClpHeader clpHeader;
+
+	BayoClpClhClwFileNode(std::string fName);
+
+	void LoadFile() override;
+	void SaveFile() override;
+
+	void RenderGUI(CruelerContext* ctx);
+	
 };
