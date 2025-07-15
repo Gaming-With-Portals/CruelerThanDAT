@@ -1,6 +1,16 @@
 > "You can be crueler than that, Jack!"
 - Sundowner, Metal Gear Rising (2013)
 
+## SUPPORTED TITLES
+(These titles are in order of most functional to least, however all titles have some functionality)
+- Metal Gear Rising: Revengeance
+- Bayonetta 1
+- Bayonetta 2
+- Bayonetta 3
+- Nier: Automata
+
+All titles also can have the big-endian console variants opened.
+
 ## Features
 - Full WMB/SCR viewer with textures
 - LY2 Editor
