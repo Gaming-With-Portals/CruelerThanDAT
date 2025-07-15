@@ -2,9 +2,16 @@
 
 #define NOMINMAX
 #define CURL_STATICLIB
+#define SDL_MAIN_USE_CALLBACKS 1  
 
-#include <imgui_impl_dx9.h>
-#include <imgui_impl_win32.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+#include <glad/glad.h>
+#include <glm/glm.hpp>
+#include <gli/gli.hpp>
+#include <imgui_impl_opengl3.h>
+#include <imgui_impl_sdl3.h>
+#include <ddz.h>
 
 #include "CruelerThanDAT.h"
 #include "globals.h"
@@ -16,59 +23,12 @@
 #include "FileUtils.h"
 #include "CTDSettings.h"
 #include "CPKManager.h"
+#include <TextureHelper.h>
+#include <LanguageManager.h>
 
-
+const glm::uvec2 SCREEN_RESOLUTION = { 1280, 720 };
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
-int TEXTURE_CAP = 512;
-
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
-static LPDIRECT3D9              g_pD3D = nullptr;
-static LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
-static bool                     g_DeviceLost = false;
-static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
-static D3DPRESENT_PARAMETERS    g_d3dpp = {};
-static bool hasReset = false;
-
-HWND hwnd;
-
-static LPDIRECT3DVERTEXSHADER9 pSolidShaderVTX = nullptr;
-static LPDIRECT3DPIXELSHADER9 pSolidShaderPX = nullptr;
-
-static int RES_X = 1600;
-static int RES_Y = 900;
-static float globalProgress = 0.0f;
-
-LPDIRECT3DTEXTURE9 g_RenderTargetTexture = nullptr;
-LPDIRECT3DSURFACE9 g_RenderTargetSurface = nullptr;
-
-// TODO: Delete
-static D3DXMATRIX projMatrix;
-
-float yaw = 0.0f;
-float pitch = 0.0f;
-float radius = 10.0f;
-
-D3DXVECTOR3 target = D3DXVECTOR3(0, 0, 0);
-D3DXVECTOR3 cameraPos;
-D3DXMATRIX view;
-
-static CTDSettings appConfig;
-
-bool hasHandledArguments = false;
-bool showViewport = true;
-
-std::string downloadURL = "";
-static std::unordered_map<unsigned int, LPDIRECT3DTEXTURE9> textureMap;
-static LPDIRECT3DTEXTURE9 applicationIcon;
-static std::unordered_map<unsigned int, std::vector<char>> rawTextureInfo;
-
-ThemeManager* themeManager;
-CPKManager* cpkManager;
-
-
-bool showAllSCRMeshes = false;
-bool cruelerLog = true;
+std::vector<FileNode*> openFiles;
 
 namespace HelperFunction {
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess, bool bigEndian) {
@@ -121,11 +81,36 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
-		else if (fileType == 876760407) {
+		else if (fileType == 4605509) {
+			outputFile = new EstFileNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+		}
+		else if (fileType == 876760407 || fileType == 859983191 || fileType == 4345175) {
+			unsigned int wmbMajorVersion = fileType;
+			unsigned int wmbMinorVersion = *reinterpret_cast<const uint32_t*>(&data[4]);
+
 			outputFile = new WmbFileNode(fileName);
 			if (forceEndianess) {
 				outputFile->fileIsBigEndian = bigEndian;
 			}
+
+			if (wmbMajorVersion == 876760407 && wmbMinorVersion == 0) {
+				WmbFileNode* wmb = (WmbFileNode*)outputFile;
+				wmb->wmbVersion = WMB4_MGRR;
+			}
+			else if (wmbMajorVersion == 859983191 || wmbMinorVersion == 538312982 || wmbMinorVersion == 538970148) {
+				WmbFileNode* wmb = (WmbFileNode*)outputFile;
+				wmb->wmbVersion = WMB3_BAY3;
+			}
+			else if (wmbMajorVersion == 4345175) {
+				WmbFileNode* wmb = (WmbFileNode*)outputFile;
+				wmb->wmbVersion = WMB0_BAY1;
+			}
+
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
@@ -168,6 +153,14 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
+		else if (fileType == 3294789) {
+			outputFile = new BayoEffNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+			}
 		else if (fileType == 4346967) {
 			outputFile = new WtbFileNode(fileName);
 			if (forceEndianess) {
@@ -176,6 +169,30 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			//outputFile->LoadFile();
 		}
+		else if (fileType == 4674132) {
+			outputFile = new TrgFileNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+			}
+		else if (fileExtension == ".clp" || fileExtension == ".clh" || fileExtension == ".clw") {
+			// If it didn't get flagged as BXM, it's probably a bayo 1 file
+			outputFile = new BayoClpClhClwFileNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			
+			if (fileExtension == ".clp") { ((BayoClpClhClwFileNode*)outputFile)->type = B1_CLP; };
+			if (fileExtension == ".clh") { ((BayoClpClhClwFileNode*)outputFile)->type = B1_CLH; };
+			if (fileExtension == ".clw") { ((BayoClpClhClwFileNode*)outputFile)->type = B1_CLW; };
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+
+		}
+
+
 		else {
 			outputFile = new UnkFileNode(fileName);
 			if (forceEndianess) {
@@ -192,15 +209,27 @@ namespace HelperFunction {
 	}
 }
 
+void CreateFramebuffer(CruelerContext *ctx, int res_x, int res_y) {
+	ctx->viewportLastSize.x = res_x;
+	ctx->viewportLastSize.y = res_y;
+
+	glGenFramebuffers(1, &ctx->viewportFrameBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, ctx->viewportFrameBuffer);
+
+	glGenTextures(1, &ctx->viewportColorTexture);
+	glBindTexture(GL_TEXTURE_2D, ctx->viewportColorTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, res_x, res_y, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->viewportColorTexture, 0);
+
+	glGenRenderbuffers(1, &ctx->viewportDepthRenderBuffer);
+	glBindRenderbuffer(GL_RENDERBUFFER, ctx->viewportDepthRenderBuffer);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, res_x, res_y);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ctx->viewportDepthRenderBuffer);
 
 
-
-void CreateViewportRT(int width, int height)
-{
-	g_pd3dDevice->CreateTexture(width, height, 1, D3DUSAGE_RENDERTARGET,
-		D3DFMT_A32B32G32R32F, D3DPOOL_DEFAULT, &g_RenderTargetTexture, NULL);
-
-	g_RenderTargetTexture->GetSurfaceLevel(0, &g_RenderTargetSurface);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 FileNode* FileNodeFromFilepath(std::string filePath) {
@@ -242,7 +271,7 @@ std::string getDTTPath(const std::string& originalPath) {
 	return "";
 }
 
-void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
+void DX9WTAWTPLoad(CruelerContext *ctx, BinaryReader& WTA, BinaryReader& WTP) {
 	if (WTA.GetSize() < 28 || WTP.GetSize() <= 0) {
 		return;
 	}
@@ -275,17 +304,31 @@ void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
 
 
 	for (unsigned int i = 0; i < textureCount; i++) {
-		LPDIRECT3DTEXTURE9 tmpTexture;
 		WTP.Seek(offsets[i]);
 		std::vector<char> data = WTP.ReadBytes(sizes[i]);
-		LPCVOID ptr = static_cast<LPCVOID>(data.data());
-		HRESULT hr = D3DXCreateTextureFromFileInMemory(g_pd3dDevice, ptr, sizes[i], &tmpTexture);
-		if (FAILED(hr)) {
+		gli::texture tex = gli::load(data.data(), data.size());
+		if (tex.empty()) {
 			CTDLog::Log::getInstance().LogError("Failed to load texture");
 		}
 		else {
-			rawTextureInfo[idx[i]] = data;
-			textureMap[idx[i]] = tmpTexture;
+			unsigned int textureID;
+			glGenTextures(1, &textureID);
+
+			gli::gl GL(gli::gl::PROFILE_GL33);
+			gli::gl::format const Format = GL.translate(tex.format(), tex.swizzles());
+			GLenum target = GL.translate(tex.target());
+
+			glBindTexture(target, textureID);
+
+			for (std::size_t Level = 0; Level < tex.levels(); ++Level) {
+				glm::tvec3<GLsizei> extent(tex.extent(Level));
+				glCompressedTexImage2D(target, static_cast<GLint>(Level), Format.Internal, extent.x, extent.y, 0, static_cast<GLsizei>(tex.size(Level)), tex.data(0, 0, Level));
+			}
+
+			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			ctx->rawTextureInfo[idx[i]] = data;
+			ctx->textureMap[idx[i]] = textureID;
 		}
 
 	}
@@ -293,7 +336,7 @@ void DX9WTAWTPLoad(BinaryReader& WTA, BinaryReader& WTP) {
 }
 
 
-void PopulateTextures() {
+void PopulateTextures(CruelerContext *ctx) {
 	// keep track of variables: challenge level impossible
 	for (FileNode* node : openFiles) {
 		if (fs::exists(getDTTPath(node->fileName))) {
@@ -314,7 +357,7 @@ void PopulateTextures() {
 						BinaryReader wtp = BinaryReader(wtpFile->fileData);
 						wta.SetEndianess(node->fileIsBigEndian);
 
-						DX9WTAWTPLoad(wta, wtp);
+						TextureHelper::LoadData(wta, wtp, ctx->textureMap);
 						return;
 					}
 
@@ -324,7 +367,7 @@ void PopulateTextures() {
 					BinaryReader wtp = BinaryReader(dtnode->fileData);
 					wta.SetEndianess(node->fileIsBigEndian);
 
-					DX9WTAWTPLoad(wta, wtp);
+					TextureHelper::LoadData(wta, wtp, ctx->textureMap);
 					return;
 				}
 			}
@@ -344,7 +387,7 @@ void PopulateTextures() {
 						BinaryReader wtp = BinaryReader(wtpFile->fileData);
 						wta.SetEndianess(node->fileIsBigEndian);
 
-						DX9WTAWTPLoad(wta, wtp);
+						TextureHelper::LoadData(wta, wtp, ctx->textureMap);
 
 						printf("Loading textures...");
 						return;
@@ -356,13 +399,20 @@ void PopulateTextures() {
 					BinaryReader wtp = BinaryReader(dtnode->fileData);
 					wta.SetEndianess(node->fileIsBigEndian);
 
-					DX9WTAWTPLoad(wta, wtp);
+					TextureHelper::LoadData(wta, wtp, ctx->textureMap);
 					return;
 				}
 			}
 
 		}
 		else {
+			for (FileNode* child : node->children) {
+				if (child->fileExtension == "wtb") {
+					BinaryReader wta = BinaryReader(child->fileData);
+					TextureHelper::LoadData(wta, wta, ctx->textureMap);
+				}
+			}
+
 			CTDLog::Log::getInstance().LogWarning("No DTT file associated with " + node->fileName);
 		}
 
@@ -377,7 +427,7 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
 	return size * nmemb;
 }
 
-void SelfUpdate() {
+void SelfUpdate(CruelerContext *ctx) {
 	CURL* curl = curl_easy_init();
 	std::string response;
 
@@ -401,8 +451,8 @@ void SelfUpdate() {
 		int newBuild = std::stoi(numberPart);
 		if (newBuild > BUILD_NUMBER) {
 			CTDLog::Log::getInstance().LogUpdate();
-			downloadURL = data["assets"][0]["browser_download_url"];
-			if (downloadURL != "") {
+			ctx->downloadURL = data["assets"][0]["browser_download_url"];
+			if (ctx->downloadURL != "") {
 				SHOULD_UPDATE = true;
 			}
 
@@ -414,191 +464,26 @@ void SelfUpdate() {
 
 
 }
-int lastMouseX = 0;
-int lastMouseY = 0;
-bool isDragging = false;
 
-LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
-		return true;
-
-	switch (msg)
-	{
-	case WM_LBUTTONDOWN:
-	{
-		isDragging = true;
-		lastMouseX = LOWORD(lParam);
-		lastMouseY = HIWORD(lParam);
-		SetCapture(hWnd); // lock mouse input to window
-		break;
-	}
-
-	case WM_LBUTTONUP:
-	{
-		isDragging = false;
-		ReleaseCapture();
-		break;
-	}
-
-	case WM_MOUSEMOVE:
-	{
-		if (isDragging)
-		{
-			int x = LOWORD(lParam);
-			int y = HIWORD(lParam);
-
-			int dx = x - lastMouseX;
-			int dy = y - lastMouseY;
-
-			lastMouseX = x;
-			lastMouseY = y;
-
-			float sensitivity = 0.01f;
-			yaw += dx * sensitivity;
-			pitch += dy * sensitivity;
-		}
-		break;
-	}
-	case WM_MOUSEWHEEL:
-	{
-		short delta = GET_WHEEL_DELTA_WPARAM(wParam); // +120 or -120
-		float scrollSpeed = 5.0f; // tweak for sensitivity
-		radius -= (delta / 120.0f) * scrollSpeed;
-
-
-		radius = std::max(2.0f, std::min(1000.0f, radius));
-		break;
-	}
-
-	case WM_SIZE:
-		if (wParam == SIZE_MINIMIZED)
-			return 0;
-		g_ResizeWidth = (UINT)LOWORD(lParam); // Queue resize
-		g_ResizeHeight = (UINT)HIWORD(lParam);
-		return 0;
-	case WM_SYSCOMMAND:
-		if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
-			return 0;
-		break;
-	case WM_DESTROY:
-		::PostQuitMessage(0);
-		return 0;
-	case WM_CREATE:
-		DragAcceptFiles(hWnd, TRUE);  // Enable drag-and-drop
-		break;
-	case WM_DROPFILES: {
-		HDROP hDrop = (HDROP)wParam;
-		wchar_t filePath[MAX_PATH] = { 0 };
-
-		// Get the first dropped file (you can loop for multiple files)
-		if (DragQueryFileW(hDrop, 0, filePath, MAX_PATH)) {
-
-			openFiles.push_back(FileNodeFromFilepath(WCharToString(filePath)));
-			if (appConfig.AutomaticallyLoadTextures) {
-				PopulateTextures();
-			}
-
-			// TODO: Process the file (load texture, model, etc.)
-		}
-
-		DragFinish(hDrop); // Free resources
-		break;
-	}
-	case WM_EXITSIZEMOVE:
-	case WM_CAPTURECHANGED:
-		// Tell ImGui to clear mouse drag/active states here
-		ImGui::GetIO().MouseDown[0] = false;
-		ImGui::GetIO().MouseDown[1] = false;
-		ImGui::GetIO().MouseDown[2] = false;
-		break;
-	}
-	return ::DefWindowProcW(hWnd, msg, wParam, lParam);
-}
-
-bool CreateDeviceD3D(HWND hWnd)
-{
-	if ((g_pD3D = Direct3DCreate9(D3D_SDK_VERSION)) == nullptr)
-		return false;
-
-	// Create the D3DDevice
-	ZeroMemory(&g_d3dpp, sizeof(g_d3dpp));
-	g_d3dpp.Windowed = TRUE;
-	g_d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	g_d3dpp.BackBufferFormat = D3DFMT_UNKNOWN; // Need to use an explicit format with alpha if needing per-pixel alpha composition.
-	g_d3dpp.EnableAutoDepthStencil = TRUE;
-	g_d3dpp.AutoDepthStencilFormat = D3DFMT_D16;
-	g_d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_ONE;           // Present with vsync
-	g_d3dpp.BackBufferWidth = 1600;
-	g_d3dpp.BackBufferHeight = 900;
-	//g_d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;   // Present without vsync, maximum unthrottled framerate
-	if (g_pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &g_d3dpp, &g_pd3dDevice) < 0)
-		return false;
-
-	LPD3DXBUFFER pVertexShaderBuffer = nullptr;
-	LPD3DXBUFFER pPixelShaderBuffer = nullptr;
-
-	D3DXCompileShader(solidColorVTX, static_cast<UINT>(strlen(solidColorVTX)),
-		NULL, NULL, "main", "vs_3_0", 0,
-		&pVertexShaderBuffer, NULL, NULL);
-
-	D3DXCompileShader(solidColorPX, static_cast<UINT>(strlen(solidColorPX)),
-		NULL, NULL, "main", "ps_3_0", 0,
-		&pPixelShaderBuffer, NULL, NULL);
-
-	g_pd3dDevice->CreateVertexShader((DWORD*)pVertexShaderBuffer->GetBufferPointer(), &pSolidShaderVTX);
-	g_pd3dDevice->CreatePixelShader((DWORD*)pPixelShaderBuffer->GetBufferPointer(), &pSolidShaderPX);
-
-	g_pd3dDevice->SetVertexShader(pSolidShaderVTX);
-	g_pd3dDevice->SetPixelShader(pSolidShaderPX);
-
-	return true;
-}
-
-void CleanupDeviceD3D()
-{
-	if (g_pd3dDevice) { g_pd3dDevice->Release(); g_pd3dDevice = nullptr; }
-	if (g_pD3D) { g_pD3D->Release(); g_pD3D = nullptr; }
-}
-
-void ResetDevice()
-{
-
-	ImGui_ImplDX9_InvalidateDeviceObjects();
-	HRESULT hr = g_pd3dDevice->Reset(&g_d3dpp);
-	if (hr == D3DERR_INVALIDCALL)
-		IM_ASSERT(0);
-	ImGui_ImplDX9_CreateDeviceObjects();
-}
-
-
-
-
-
-
-void RenderFrame() {
-
-
-
+void RenderFrame(CruelerContext *ctx) {
 	static float fov = 50.0f;
 	static float index = 180.0f;
-	//static float cameraPos[3] = { 0.0f, 0.0f, -15.0f };
+	//static float ctx->cameraPos[3] = { 0.0f, 0.0f, -15.0f };
 	static float cameraVec[3] = { -1.0f, 0.2f, 0.0f };
 	(void)cameraVec;
 	static bool spinModel = false;
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
-	g_pd3dDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
 
 	// Start the ImGui frame
-	ImGui_ImplDX9_NewFrame();
-	ImGui_ImplWin32_NewFrame();
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
-
+	glViewport(0, 0, (int)ctx->winSize.x, (int)ctx->winSize.y);
+	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth), 26));
+	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x), 26));
 
 	ImGui::Begin("TabCtrl", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
 
@@ -606,7 +491,7 @@ void RenderFrame() {
 
 		if (ImGui::Button("Update")) {
 			SHOULD_UPDATE = false;
-			URLDownloadToFileA(NULL, downloadURL.c_str(), "update.zip", NULL, NULL);
+			URLDownloadToFileA(NULL, ctx->downloadURL.c_str(), "update.zip", NULL, NULL);
 			ShellExecute(NULL, L"open", L"update.bat", NULL, NULL, SW_SHOWNORMAL);
 			exit(0);
 
@@ -616,12 +501,12 @@ void RenderFrame() {
 
 	if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
 		ReleaseCapture();
-		PostMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+		//PostMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
 	}
 
-	//ImGui::Text("Textures Loaded: %zu/%d", textureMap.size(), TEXTURE_CAP);
+	//ImGui::Text("Textures Loaded: %zu/%d", ctx->textureMap.size(), TEXTURE_CAP);
 	
-	ImGui::Image((ImTextureID)(intptr_t)applicationIcon, ImVec2(16, 16));
+	ImGui::Image((ImTextureID)1, ImVec2(16, 16)); // TODO: Figure out what's the correct thing for this
 	ImGui::SameLine();
 	ImGui::SetCursorPosY(9);
 	ImGui::Text("CruelerThanDAT");
@@ -630,7 +515,7 @@ void RenderFrame() {
 	ImGui::SetCursorPosY(-1);
 	ImGui::SetCursorPosX(0);
 
-	ImGui::ProgressBar(globalProgress, ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth), 4.0f), "");
+	ImGui::ProgressBar(ctx->progress, ImVec2(static_cast<float>(ctx->winSize.x), 4.0f), "");
 
 	float spacing = 4.0f;
 	float btnW = 36.0f;
@@ -644,56 +529,64 @@ void RenderFrame() {
 	ImGui::SameLine();
 
 	if (ImGui::Button("X", ImVec2(btnW, 0))) {
-		PostQuitMessage(0);
+		exit(0);
 	}
 
 	ImGui::End();
-
+	
 	ImGui::SetNextWindowPos(ImVec2(0, 36));
-	ImGui::SetNextWindowSize(ImVec2(350, static_cast<float>(g_d3dpp.BackBufferHeight) - 36));
+	ImGui::SetNextWindowSize(ImVec2(350, static_cast<float>(ctx->winSize.y) - 36));
 
 	ImGui::Begin("DatView", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
 
 	if (ImGui::BeginTabBar("primary_control")) {
 
-		if (ImGui::BeginTabItem("Data Viewer")) {
+		if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Data Viewer"))) {
 			if (openFiles.size() == 0) {
-				ImGui::Text("No open files yet!");
-				ImGui::Text("Drag a file onto the window to get started");
+				ImGui::Text(LanguageManager::Instance().TR("No open files yet!"));
+				ImGui::Text(LanguageManager::Instance().TR("Drag a file onto the window to get started"));
 			}
 
 
 			for (FileNode* node : openFiles) {
-				node->Render();
+				node->Render(ctx);
 			}
 
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("CPK Viewer")) {
+		if (ImGui::BeginTabItem(LanguageManager::Instance().TR("CPK Viewer"))) {
 
-			cpkManager->Render();
+			ctx->cpkManager->Render(ctx);
 
 
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Configuration")) {
-			if (ImGui::Button("SAVE")) {
-				appConfig.Write();
+		if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Configuration"))) {
+			if (ImGui::Button(LanguageManager::Instance().TR("Save"))) {
+				ctx->config.Write();
 			}
 
 			ImGui::Text("WMB/SCR");
-			ImGui::Checkbox("Automatically Load Textures", &appConfig.AutomaticallyLoadTextures);
-			ImGui::Checkbox("Show All SCR Meshes By Default", &appConfig.ShowAllMeshesByDefault);
+			ImGui::Checkbox(LanguageManager::Instance().TR("Automatically Load Textures"), &ctx->config.AutomaticallyLoadTextures);
+			ImGui::Checkbox(LanguageManager::Instance().TR("Show All SCR Meshes By Default"), &ctx->config.ShowAllMeshesByDefault);
 
 			ImGui::Text("Theme");
 			if (ImGui::Button("ImGui Theme")) {
-				themeManager->ChooseStyle(0);
+				ctx->themeManager->ChooseStyle(0);
 			}
 			if (ImGui::Button("Visual Studio Theme")) {
-				themeManager->ChooseStyle(1);
+				ctx->themeManager->ChooseStyle(1);
 			}
 			if (ImGui::Button("Half Life Theme")) {
-				themeManager->ChooseStyle(2);
+				ctx->themeManager->ChooseStyle(2);
+			}
+
+			ImGui::SeparatorText("Language");
+			if (ImGui::Button("English")) {
+				LanguageManager::Instance().currentLang = &LanguageManager::Instance().lang_en;
+			}
+			if (ImGui::Button("Espanol")) {
+				LanguageManager::Instance().currentLang = &LanguageManager::Instance().lang_es;
 			}
 
 			ImGui::EndTabItem();
@@ -712,16 +605,16 @@ void RenderFrame() {
 
 	ImGui::SetNextWindowPos(ImVec2(350, 36));
 	int window_height = 0;
-	if (cruelerLog) {
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, static_cast<float>(g_d3dpp.BackBufferHeight) - 335));
-		window_height = g_d3dpp.BackBufferHeight - 335;
+	if (ctx->cruelerLog) {
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x) - 350, static_cast<float>(ctx->winSize.y) - 335));
+		window_height = ctx->winSize.y - 335;
 	}
 	else {
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, static_cast<float>(g_d3dpp.BackBufferHeight) - 75));
-		window_height = g_d3dpp.BackBufferHeight - 80;
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x) - 350, static_cast<float>(ctx->winSize.y) - 75));
+		window_height = ctx->winSize.y - 80;
 	}
 
-	if (showViewport == false) {
+	if (ctx->viewportShow == false) {
 		ImGui::SetNextWindowBgAlpha(0.1f);
 	}
 	else {
@@ -730,26 +623,23 @@ void RenderFrame() {
 
 	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
-	if (g_RenderTargetSurface == nullptr || g_RenderTargetTexture == nullptr) {
-		CreateViewportRT(ImGui::GetWindowSize().x, ImGui::GetWindowSize().y);
-	}
-	LPDIRECT3DSURFACE9 g_OriginalBackBuffer = nullptr;
-	g_pd3dDevice->GetRenderTarget(0, &g_OriginalBackBuffer);
-	g_pd3dDevice->SetRenderTarget(0, g_RenderTargetSurface);
-	g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
-		D3DCOLOR_XRGB(50, 50, 50), 1.0f, 0);
+	//LPDIRECT3DSURFACE9 g_OriginalBackBuffer = nullptr;
+	//g_pd3dDevice->GetRenderTarget(0, &g_OriginalBackBuffer);
+	//g_pd3dDevice->SetRenderTarget(0, g_RenderTargetSurface);
+	//g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
+	//	D3DCOLOR_XRGB(50, 50, 50), 1.0f, 0);
 
 	if (FileNode::selectedNode) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
-			showViewport = true;
+			ctx->viewportShow = true;
 			BxmFileNode* bxmNode = ((BxmFileNode*)FileNode::selectedNode);
-			bxmNode->RenderGUI();
+			bxmNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WTB) {
-			showViewport = true;
+			ctx->viewportShow = true;
 			ImGui::Text("- Textures");
 			WtbFileNode* wtbNode = ((WtbFileNode*)FileNode::selectedNode);
-			if (ImGui::BeginListBox("##texturebox", ImVec2{ (float)g_d3dpp.BackBufferWidth - 350.0f, (float)window_height })) {
+			if (ImGui::BeginListBox("##texturebox", ImVec2{ (float)ctx->winSize.x - 350.0f, (float)window_height })) {
 				for (int x = 0; x < wtbNode->textureCount; x++) {
 
 					ImGui::Text("ID: %i", wtbNode->textureIdx[x]);
@@ -762,42 +652,163 @@ void RenderFrame() {
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::LY2) {
 			LY2FileNode* ly2Node = ((LY2FileNode*)FileNode::selectedNode);
-			ly2Node->RenderGUI();
+			ly2Node->RenderGUI(ctx);
+		}
+		else if (FileNode::selectedNode->nodeType == FileNodeTypes::EST) {
+			EstFileNode* estNode = ((EstFileNode*)FileNode::selectedNode);
+			estNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::UID) {
 			UidFileNode* uidNode = ((UidFileNode*)FileNode::selectedNode);
-			uidNode->RenderGUI();
+			uidNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::UVD) {
 			UvdFileNode* uvdNode = ((UvdFileNode*)FileNode::selectedNode);
-			uvdNode->RenderGUI();
+			uvdNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::BNK) {
 			BnkFileNode* bnkNode = ((BnkFileNode*)FileNode::selectedNode);
-			bnkNode->RenderGUI();
+			bnkNode->RenderGUI(ctx);
+		}
+		else if (FileNode::selectedNode->nodeType == FileNodeTypes::B1PHYS) {
+			BayoClpClhClwFileNode* physNode = ((BayoClpClhClwFileNode*)FileNode::selectedNode);
+			physNode->RenderGUI(ctx);
+
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
-			showViewport = false;
+			ctx->viewportShow = false;
 			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
 
 			if (ImGui::BeginTabBar("wmb_editor")) {
-				if (ImGui::BeginTabItem("Meshes")) {
-					wmbNode->RenderGUI();
+				std::string wmbVersionString = "WMB?";
+				std::string wmbGameTitle = "?";
+				if (wmbNode->wmbVersion == WMB4_MGRR) {
+					wmbVersionString = "WMB4";
+					wmbGameTitle = "Metal Gear Rising: Revengeance";
+				}
+				else if (wmbNode->wmbVersion == WMB3_BAY3) {
+					wmbVersionString = "WMB3";
+					wmbGameTitle = "Bayonetta 3";
+				}
+				else if (wmbNode->wmbVersion == WMB0_BAY1) {
+					wmbVersionString = "WMB0";
+					wmbGameTitle = "Bayonetta 1";
+				}
+
+				else if (wmbNode->wmbVersion == WMB0_BAY2) {
+					wmbVersionString = "WMB0";
+					wmbGameTitle = "Bayonetta 2";
+				}
+				int textSize = ImGui::CalcTextSize((wmbVersionString + " - " + wmbGameTitle).c_str()).x;
+				if (ImGui::GetWindowWidth() - textSize - 340 > 0) {
+					ImGui::SameLine(ImGui::GetWindowWidth() - textSize - 10);
+					ImGui::Text((wmbVersionString + " - " + wmbGameTitle).c_str());
+				}
+				else if (ImGui::GetWindowWidth() - ImGui::CalcTextSize((wmbVersionString).c_str()).x - 340 > 0) {
+					ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize((wmbVersionString).c_str()).x - 10);
+					ImGui::Text((wmbVersionString).c_str());
+				}
+
+
+
+				if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Meshes"))) {
+					wmbNode->RenderGUI(ctx);
 					ImGui::EndTabItem();
 				}
 
-				if (ImGui::BeginTabItem("Materials")) {
+				if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Materials"))) {
 					ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
 					ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
 					if (ImGui::Button("Fetch Textures")) {
 
-						PopulateTextures();
+						PopulateTextures(ctx);
 					}
 
 
 					int i = 0;
 					for (CTDMaterial& mat : wmbNode->materials) {
+						if (mat.glFramebuffer == 0) {
+							glEnable(GL_DEPTH_TEST);
+							static WmbFileNode* renderMesh = (WmbFileNode*)FileNodeFromFilepath("Assets/Model/preview.wmb");
+							// Create fbo and render material
+							renderMesh->materials[0] = mat;
+							glGenFramebuffers(1, &mat.glFramebuffer);
+							glBindFramebuffer(GL_FRAMEBUFFER, mat.glFramebuffer);
 
+							glGenTextures(1, &mat.glFrametexture);
+							glBindTexture(GL_TEXTURE_2D, mat.glFrametexture);
+							glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 512, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+							glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mat.glFrametexture, 0);
+
+							GLuint depthRBO;
+							glGenRenderbuffers(1, &depthRBO);
+							glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+							glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+							glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+
+							glBindFramebuffer(GL_FRAMEBUFFER, mat.glFramebuffer);
+							glViewport(0, 0, 512, 512);
+							glClearColor(0.0, 0.0, 0.0, 0.0);
+							glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+							renderMesh->RenderPreviewMesh(ctx);
+
+							glBindFramebuffer(GL_FRAMEBUFFER, 0);
+							glViewport(0, 0, ctx->winSize.x, ctx->winSize.y);
+
+						}
+
+
+
+
+						ImGui::Text((("Material " + std::to_string(i))).c_str());
+						if (ImGui::IsItemHovered()) {
+							mat.highlight = true;
+						}
+						else {
+							mat.highlight = false;
+						}
+						ImGui::BeginGroup();
+						ImGui::Image((ImTextureID)(intptr_t)mat.glFrametexture, ImVec2(64, 64));
+						ImGui::EndGroup();
+						ImGui::SameLine();
+						ImGui::BeginGroup();
+						for (const auto& pair : mat.texture_data) {
+							std::string textureString = "Tex" + std::to_string(pair.first) + ": %d";
+							if (TEXTURE_DEF.find(pair.first) != TEXTURE_DEF.end()) {
+								textureString = TEXTURE_DEF[pair.first] + ": %d";
+							}
+							
+							
+							if (ctx->textureMap.contains(pair.second)) {
+								ImGui::TextColored(ImVec4(0.0, 1.0, 1.0, 1.0) , textureString.c_str(), pair.second);
+								if (ImGui::IsItemHovered()) {
+									ImGui::BeginTooltip();
+									ImGui::Image((ImTextureID)(intptr_t)ctx->textureMap[pair.second], ImVec2(96, 96));
+									ImGui::EndTooltip();
+								}
+							}
+							else {
+								ImGui::Text(textureString.c_str(), pair.second);
+							}
+	
+
+						}
+						ImGui::EndGroup();
+						if (ImGui::CollapsingHeader(("Parameters###" + std::to_string(i)).c_str())) {
+							int j = 0;
+							for (std::array<float, 4>&array : mat.parameters) {
+								ImGui::InputFloat4(("###parameter_" + std::to_string(i) + "_" + std::to_string(j)).c_str(), array.data());
+
+								j += 1;
+							}
+						}
+
+
+						ImGui::Separator();
+
+						/*ImGui::SameLine();
 						if (ImGui::TreeNode((("Material " + std::to_string(i))).c_str())) {
 
 							ImGui::Text("Shader Name: %s", mat.shader_name.c_str());
@@ -812,7 +823,7 @@ void RenderFrame() {
 							}
 
 							ImGui::TreePop();
-						}
+						}*/
 
 						i += 1;
 					}
@@ -822,61 +833,110 @@ void RenderFrame() {
 
 					ImGui::EndTabItem();
 				}
+				if (!wmbNode->isSCR) {
+					if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Skeleton"))) {
 
-				if (ImGui::BeginTabItem("Skeleton")) {
-					
-					wmbNode->RenderBoneGUI();
+						wmbNode->RenderBoneGUI();
 
-
-					ImGui::EndTabItem();
-				}
-
-				if (wmbNode->isSCR) {
-					if (ImGui::BeginTabItem("SCR Options")) {
-						ImGui::Checkbox("Show All SCR Meshes", &showAllSCRMeshes);
 
 						ImGui::EndTabItem();
 					}
 				}
 
-				if (ImGui::BeginTabItem("Visualizer")) {
-					ImGui::SetNextItemWidth(120.0f);
-					ImGui::SliderFloat("FOV", &fov, 20.0f, 100.0f);
-					//ImGui::Checkbox("Spin Model?", &spinModel);
-					ImGui::EndTabItem(); 
+
+				if (wmbNode->isSCR) {
+					if (ImGui::BeginTabItem("SCR Options")) {
+						ImGui::Checkbox("Show All SCR Meshes", &ctx->showAllScrMeshes);
+
+						ImGui::EndTabItem();
+					}
 				}
+
+				if (wmbNode->wmbVersion == WMB4_MGRR) {
+					if (ImGui::BeginTabItem(LanguageManager::Instance().TR("Tools"))) {
+						if (wmbNode->hasCutdata) {
+							if (ImGui::Button("Remove Cutting Data")) {
+								wmbNode->RemoveCuttingDataWMB4();
+							}
+							ImGui::SameLine();
+							HelpMarker("This operation is irreversible, you will need to re-export your mesh if you want cutdata later");
+						}
+
+						ImGui::EndTabItem();
+					}
+				}
+
 
 				ImGui::EndTabBar();
 			}
 
 
+			ImVec2 windowSize = ImGui::GetWindowSize();
+			ImVec2 windowPos = ImGui::GetWindowPos();
+
+			ImGui::SetCursorScreenPos(ImVec2(windowPos.x + windowSize.x - 30.0f, windowPos.y + 80));
+
+			if (ImGui::ArrowButton("##PopoutToggle", (ImGuiDir)wmbNode->visualizerPopout))
+				wmbNode->visualizerPopout = !wmbNode->visualizerPopout;
+
+			if (wmbNode->visualizerPopout)
+			{
+				float popoutWidth = 200.0f;
+				float popoutHeight = 150.0f;
+
+				ImVec2 popoutPos = ImVec2(ImVec2(windowPos.x + windowSize.x - 30.0f, windowPos.y + 80).x - popoutWidth, ImVec2(windowPos.x + windowSize.x - 30.0f, windowPos.y + 80).y);
+
+				ImGui::SetNextWindowPos(popoutPos);
+				ImGui::SetNextWindowSize(ImVec2(popoutWidth, popoutHeight));
+				ImGui::Begin("WMB_POPOUT", &wmbNode->visualizerPopout,
+					ImGuiWindowFlags_NoTitleBar |
+					ImGuiWindowFlags_NoResize |
+					ImGuiWindowFlags_AlwaysAutoResize |
+					ImGuiWindowFlags_NoMove |
+					ImGuiWindowFlags_NoCollapse |
+					ImGuiWindowFlags_NoSavedSettings);
+
+
+				ImGui::Checkbox("Show Bones", &wmbNode->visualizerShowBones);
+				ImGui::SeparatorText("Render Mode");
+				ImGui::Checkbox("Wireframe", &wmbNode->visualizerWireframe);
+
+				ImGui::End();
+			}
 
 		}
 
 	}
 
-	ImVec2 pos = ImVec2(350, 36);
+	ImVec2 pos = ImGui::GetWindowPos();
 	ImVec2 size = ImGui::GetWindowSize();
 	ImGui::GetBackgroundDrawList()->AddImage(
-		(void*)g_RenderTargetTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y));
-
+		(ImTextureID)(uintptr_t)ctx->viewportColorTexture, pos, ImVec2(pos.x + size.x, pos.y + size.y), ImVec2(0, 1), ImVec2(1, 0));
+	if (ctx->viewportLastSize.x != size.x || ctx->viewportLastSize.y != size.y) {
+		glDeleteTextures(1, &ctx->viewportColorTexture);
+		glDeleteRenderbuffers(1, &ctx->viewportDepthRenderBuffer);
+		glDeleteFramebuffers(1, &ctx->viewportFrameBuffer);
+		CreateFramebuffer(ctx, size.x, size.y);
+		CameraManager::Instance().SetWindowSize(size.x, size.y);
+		CameraManager::Instance().SetWindowPos(pos.x, pos.y);
+	}
 
 	ImGui::End();
 
 
 
-	if (cruelerLog) {
+	if (ctx->cruelerLog) {
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 
-		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(g_d3dpp.BackBufferHeight) - 300));
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, 300));
+		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(ctx->winSize.y) - 300));
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x) - 350, 300));
 		ImGui::Begin("CruelerThanDAT Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
 		if (ImGui::Button(ICON_CI_TERMINAL, ImVec2(25, 25))) {
-			cruelerLog = false;
+			ctx->cruelerLog = false;
 		}
 		ImGui::SameLine();
 
@@ -902,11 +962,11 @@ void RenderFrame() {
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.0f));
-		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(g_d3dpp.BackBufferHeight) - 40));
-		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_d3dpp.BackBufferWidth) - 350, 40));
+		ImGui::SetNextWindowPos(ImVec2(350, static_cast<float>(ctx->winSize.y) - 40));
+		ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x) - 350, 40));
 		ImGui::Begin("CruelerThanDAT Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
 		if (ImGui::Button(ICON_CI_TERMINAL, ImVec2(25, 25))) {
-			cruelerLog = true;
+			ctx->cruelerLog = true;
 		}
 		ImGui::SameLine();
 		ImGui::Text("CruelerThanDAT Log");
@@ -926,115 +986,84 @@ void RenderFrame() {
 		}
 	}
 
-	D3DXMATRIX matRotateY;    // a matrix to store the rotation information
-
-
-	// build a matrix to rotate the model based on the increasing float value
-	D3DXMatrixRotationY(&matRotateY, D3DXToRadian(index));
-
 	// tell Direct3D about our matrix
-	g_pd3dDevice->SetTransform(D3DTS_WORLD, &matRotateY);
+	//g_pd3dDevice->SetTransform(D3DTS_WORLD, &matRotateY);
 
-	D3DXMATRIX matView;    // the view transform matrix
+	
+	#define CRUEL_PI 3.14159265f // TODO: Move this somewhere that makes sense
+	ctx->pitch = std::max(-CRUEL_PI * 0.49f, std::min(CRUEL_PI * 0.49f, ctx->pitch));
 
-	pitch = std::max(-D3DX_PI * 0.49f, std::min(D3DX_PI * 0.49f, pitch));
+	float x = ctx->radius * cosf(ctx->pitch) * sinf(ctx->yaw);
+	float y = ctx->radius * sinf(ctx->pitch);
+	float z = ctx->radius * cosf(ctx->pitch) * cosf(ctx->yaw);
+	ctx->cameraPos = glm::vec3(x, y, z) + ctx->target;
 
-	float x = radius * cosf(pitch) * sinf(yaw);
-	float y = radius * sinf(pitch);
-	float z = radius * cosf(pitch) * cosf(yaw);
-	cameraPos = D3DXVECTOR3(x, y, z) + target;
+	glm::vec3 up(0.0f, 1.0f, 0.0f);
+	ctx->viewMatrix = glm::lookAt(ctx->cameraPos, ctx->target, up);
+	//g_pd3dDevice->SetTransform(D3DTS_VIEW, &ctx->viewMatrix);
 
-	D3DXVECTOR3 up(0.0f, 1.0f, 0.0f);
-	D3DXMatrixLookAtLH(&view, &cameraPos, &target, &up);
-	g_pd3dDevice->SetTransform(D3DTS_VIEW, &view);
+	glm::mat4 matProjection = glm::perspective(glm::radians(fov),
+		static_cast<float>(size.x) / static_cast<float>(size.y),
+		.1f, 5000.f);
 
-	D3DXMATRIX matProjection;     // the projection transform matrix
 
-	D3DXMatrixPerspectiveFovLH(&matProjection,
-		D3DXToRadian(fov),    // the horizontal field of view
-		(FLOAT)size.x / (FLOAT)size.y, // aspect ratio
-		1.0f,    // the near view-plane
-		5000.0f);    // the far view-plane
-
-	g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &matProjection);
+	//g_pd3dDevice->SetTransform(D3DTS_PROJECTION, &matProjection);
 
 
 
 
 
-	g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-	D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
-	g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
-	g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
+	//g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+	//D3DCOLOR clear_col_dx = glm::vec4((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
+	//g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
+	//g_pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
 
-	g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
-		D3DCOLORWRITEENABLE_RED |
-		D3DCOLORWRITEENABLE_GREEN |
-		D3DCOLORWRITEENABLE_BLUE);
-	if (g_pd3dDevice->BeginScene() >= 0)
-	{
-		const float pointSize = 5.0f;
-		g_pd3dDevice->SetRenderState(D3DRS_POINTSIZE, *reinterpret_cast<const DWORD*>(&pointSize));
-		g_pd3dDevice->SetRenderState(D3DRS_LIGHTING, FALSE);  // unless you're using normals and lights
-		g_pd3dDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE); // disable backface culling for now
-		g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, TRUE);
+	//g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
+	//	D3DCOLORWRITEENABLE_RED |
+	//	D3DCOLORWRITEENABLE_GREEN |
+	//	D3DCOLORWRITEENABLE_BLUE);
 
-		if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
-			WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
-			g_pd3dDevice->SetTexture(0, textureMap[0]);
+	const float pointSize = 5.0f;
+	glBindFramebuffer(GL_FRAMEBUFFER, ctx->viewportFrameBuffer);
+	glViewport(0, 0, ctx->viewportLastSize.x, ctx->viewportLastSize.y);
+	glEnable(GL_DEPTH_TEST);
 
-			if (showAllSCRMeshes && wmbNode->isSCR) {
-				ScrFileNode* scrNode = (ScrFileNode*)wmbNode->scrNode;
-				for (FileNode* child : scrNode->children) {
-					WmbFileNode* scrChildNode = (WmbFileNode*)child;
-					scrChildNode->RenderMesh();
-				}
+	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	if (FileNode::selectedNode && FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {
+		WmbFileNode* wmbNode = ((WmbFileNode*)FileNode::selectedNode);
+		//g_pd3dDevice->SetTexture(0, ctx->textureMap[0]);
+
+		if (ctx->showAllScrMeshes && wmbNode->isSCR) {
+			ScrFileNode* scrNode = (ScrFileNode*)wmbNode->scrNode;
+			for (FileNode* child : scrNode->children) {
+				WmbFileNode* scrChildNode = (WmbFileNode*)child;
+				scrChildNode->RenderMesh(ctx);
 			}
-			else {
-				wmbNode->RenderMesh();
-			}
-
-
 
 		}
-
-		g_pd3dDevice->EndScene();
-
-		g_pd3dDevice->SetRenderState(D3DRS_COLORWRITEENABLE,
-			D3DCOLORWRITEENABLE_RED |
-			D3DCOLORWRITEENABLE_GREEN |
-			D3DCOLORWRITEENABLE_BLUE |
-			D3DCOLORWRITEENABLE_ALPHA);
-
-		g_pd3dDevice->SetRenderTarget(0, g_OriginalBackBuffer);
-		g_pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
-			D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
-		ImGui::EndFrame();
-		g_pd3dDevice->BeginScene();
+		else {
+			wmbNode->RenderMesh(ctx);
+		}
 
 
-		g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
-		g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 
-
-		ImGui::Render();
-		ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
-
-
-		g_pd3dDevice->EndScene();
 	}
-	HRESULT result = g_pd3dDevice->Present(nullptr, nullptr, nullptr, nullptr);
-	if (result == D3DERR_DEVICELOST)
-		g_DeviceLost = true;
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	ImGui::EndFrame();
+
+	ImGui::Render();
+
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	SDL_GL_SwapWindow(ctx->window);
+
+
+
 }
 
+SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
-
-
-
-int main(int argc, char* argv[])
-{
 	printf("-- CruelerThanDAT --\n");
 
 	printf("Setting working directory...\n");
@@ -1053,7 +1082,7 @@ int main(int argc, char* argv[])
 		printf("Assets are missing or corrupt. (Case 0)");
 		std::cin.get();
 	}
-	else if (!std::filesystem::exists("Assets/img.dds")) {
+	else if (!std::filesystem::exists("Assets/ctd.dat")) {
 		printf("Assets are missing or corrupt. (Case 1)");
 		std::cin.get();
 	}
@@ -1062,51 +1091,69 @@ int main(int argc, char* argv[])
 		std::cin.get();
 	}
 	else if (!std::filesystem::exists("Assets/Model")) {
-		printf("DirectX Data is missing or corrupt. (Case 0)");
+		printf("OpenGL Data is missing or corrupt. (Case 0)");
 		std::cin.get();
 	}
 
-	themeManager = new ThemeManager();
-	themeManager->UpdateThemeList();
+	DdzInit();
+
+	std::ifstream pldb("Assets/pl.json");
+	auto ctx = new CruelerContext{
+		.args = std::vector<std::string>(argv, argv + argc),
+		.winSize = SCREEN_RESOLUTION,
+		.viewportShow = true,
+		.projMatrix = glm::mat4(1.f),
+		.viewMatrix = glm::mat4(1.f),
+		.plNames = nlohmann::json::parse(pldb),
+		.cruelerLog = true,
+	};
+	pldb.close();
 
 
-	appConfig.Read();
+	ctx->themeManager = new ThemeManager();
+	ctx->themeManager->UpdateThemeList();
 
 
-	cpkManager = new CPKManager();
-	cpkManager->Init("");
+	ctx->config.Read();
 
-	printf("D3DInit...");
+
+	ctx->cpkManager = new CPKManager();
+	ctx->cpkManager->Init("");
+
+	printf("D3DInit...\n");
 	CTDLog::Log::getInstance().LogNote("Launching CruelerThanDAT...");
-	CTDLog::Log::getInstance().LogNote("Waiting for DirectX9...");
+	CTDLog::Log::getInstance().LogNote("Waiting for OpenGL...");
 
-	WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
-	::RegisterClassExW(&wc);
-	hwnd = ::CreateWindowW(wc.lpszClassName, L"CruelerThanDAT", WS_OVERLAPPEDWINDOW, 100, 100, 1600, 900, nullptr, nullptr, wc.hInstance, nullptr);
+	SDL_Init(SDL_INIT_VIDEO);
 
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-	// Initialize Direct3D
-	if (!CreateDeviceD3D(hwnd))
-	{
-		CleanupDeviceD3D();
-		::UnregisterClassW(wc.lpszClassName, wc.hInstance);
-		return 1;
+	// TODO: Resizing is not handled by the OS for borderless windows, we have to do it
+	//       manually via hit test callbacks or ditch server side decorations entirely.
+	ctx->window = SDL_CreateWindow("CruelerThanDAT",
+		ctx->winSize.x, ctx->winSize.y, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);// | SDL_WINDOW_BORDERLESS);
+
+	SDL_GLContext context = SDL_GL_CreateContext(ctx->window);
+	SDL_GL_MakeCurrent(ctx->window, context);
+	SDL_GL_SetSwapInterval(1);
+
+	if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
+		return SDL_APP_FAILURE;
 	}
 
-	LONG style = GetWindowLong(hwnd, GWL_STYLE);
-	style &= ~(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
-	SetWindowLong(hwnd, GWL_STYLE, style);
 
-	// Optional: Remove extended styles like WS_EX_DLGMODALFRAME
-	LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-	exStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
-	SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+	DatFileNode* ctd_data = (DatFileNode*)FileNodeFromFilepath("Assets/ctd.dat");
+	for (FileNode* node : ctd_data->children) {
+		if (node->nodeType == WTB) {
 
-	// Force update
-	SetWindowPos(hwnd, nullptr, 0, 0, 1600, 900, SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
-
-	::ShowWindow(hwnd, SW_SHOWDEFAULT);
-	::UpdateWindow(hwnd);
+			BinaryReader br1(node->fileData), br2(node->fileData);
+			TextureHelper::LoadData(br1, br2, ctx->textureMap);
+			break;
+		}
+	}
+	delete ctd_data;
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -1118,11 +1165,12 @@ int main(int argc, char* argv[])
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
 
-	ImGui_ImplWin32_Init(hwnd);
-	ImGui_ImplDX9_Init(g_pd3dDevice);
+	ImGui_ImplSDL3_InitForOpenGL(ctx->window, context);
+	ImGui_ImplOpenGL3_Init("#version 330 core");
 
 	// Load Fonts
 	io.Fonts->AddFontDefault();
+	
 
 	ImFontConfig config;
 	config.MergeMode = true;
@@ -1130,7 +1178,7 @@ int main(int argc, char* argv[])
 	config.GlyphOffset = ImVec2(0, 5);
 	static const ImWchar icon_ranges[] = { ICON_MIN_CI, ICON_MAX_CI, 0 };
 	io.Fonts->AddFontFromFileTTF("Assets/codicon.ttf", 18, &config, icon_ranges);
-
+	io.Fonts->Build();
 	std::ifstream infile("Assets/codicon.ttf");
 	if (!infile.good()) {
 		CTDLog::Log::getInstance().LogError("Unable to locate Assets/codicons.ttf, icons will be broken!");
@@ -1144,21 +1192,12 @@ int main(int argc, char* argv[])
 
 
 
-	themeManager->ChooseStyle(1);
+	ctx->themeManager->ChooseStyle(1);
+	ImGui::GetStyle().WindowMinSize = ImVec2(32, 32);
 
-	LPDIRECT3DTEXTURE9 pTexture;
-	HRESULT hr = D3DXCreateTextureFromFile(g_pd3dDevice, L"Assets/img.dds", &pTexture);
-	D3DXCreateTextureFromFile(g_pd3dDevice, L"Assets/CruelerThanDAT.png", &applicationIcon);
-	if (FAILED(hr)) {
-		MessageBox(0, L"Failed to load texture!", L"Error", MB_OK);
 
-	}
-
-	printf("Loading basic texture...");
-	textureMap[0] = pTexture;
-
-	if (appConfig.ShowAllMeshesByDefault) {
-		showAllSCRMeshes = true;
+	if (ctx->config.ShowAllMeshesByDefault) {
+		ctx->showAllScrMeshes = true;
 	}
 
 	::ShowWindow(::GetConsoleWindow(), SW_HIDE);
@@ -1166,57 +1205,94 @@ int main(int argc, char* argv[])
 
 	CTDLog::Log::getInstance().LogNote("CruelerThanDAT Ready");
 
-	SelfUpdate();
+	SelfUpdate(ctx);
+	CreateFramebuffer(ctx, 32, 32);
 
-	bool done = false;
-	while (!done)
-	{
-		MSG msg;
-		while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
-		{
-			::TranslateMessage(&msg);
-			::DispatchMessage(&msg);
-			if (msg.message == WM_QUIT)
-				done = true;
-		}
-		if (done)
-			break;
-
-		if (g_DeviceLost)
-		{
-			HRESULT hr0 = g_pd3dDevice->TestCooperativeLevel();
-			if (hr0 == D3DERR_DEVICELOST)
-			{
-				::Sleep(10);
-				continue;
-			}
-			if (hr0 == D3DERR_DEVICENOTRESET)
-				ResetDevice();
-			g_DeviceLost = false;
-		}
-
-		if (g_ResizeWidth != 0 && g_ResizeHeight != 0 && !hasReset)
-		{
-			g_d3dpp.BackBufferWidth = g_ResizeWidth;
-			g_d3dpp.BackBufferHeight = g_ResizeHeight;
-			g_ResizeWidth = g_ResizeHeight = 0;
-			hasReset = true;
-			ResetDevice();
-		}
-
-		RenderFrame();
-
-		if (!hasHandledArguments) {
-			for (int i = 1; i < argc; ++i) {
-				if (std::filesystem::exists(argv[i])) {
-					openFiles.push_back(FileNodeFromFilepath(argv[i]));
-
-				}
-			}
-			hasHandledArguments = true;
-		}
-
-	}
-
+	appstate[0] = reinterpret_cast<void *>(ctx);
+	return SDL_APP_CONTINUE;
 }
 
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+	auto ctx = reinterpret_cast<CruelerContext *>(appstate);
+
+	ImGui_ImplSDL3_ProcessEvent(event);
+
+	switch (event->type) {
+		case SDL_EVENT_QUIT: {
+			return SDL_APP_SUCCESS;
+		} break;
+
+		case SDL_EVENT_WINDOW_RESIZED: {
+			SDL_WindowEvent wine = event->window;
+			ctx->winSize.x = wine.data1;
+			ctx->winSize.y = wine.data2;
+		} break;
+
+		case SDL_EVENT_DROP_FILE: {
+			std::string droppedPath = event->drop.data;
+			openFiles.push_back(FileNodeFromFilepath(droppedPath));
+			if (ctx->config.AutomaticallyLoadTextures) {
+				PopulateTextures(ctx);
+			}
+		} break;
+
+		case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+			if (event->button.button == SDL_BUTTON_LEFT) {
+				int x = event->button.x;
+				int y = event->button.y;
+
+				if (y >= 0 && y <= 30) {
+					ctx->dragging = true;
+
+					int win_x, win_y;
+					SDL_GetWindowPosition(ctx->window, &win_x, &win_y);
+					ctx->dragOffsetX = x;
+					ctx->dragOffsetY = y;
+				}
+			}
+		} break;
+		
+		case SDL_EVENT_MOUSE_BUTTON_UP: {
+			if (event->button.button == SDL_BUTTON_LEFT) {
+				ctx->dragging = false;
+			}
+		} break;
+		
+		case SDL_EVENT_MOUSE_MOTION: {
+			if (ctx->dragging) {
+				float global_x = event->motion.x;
+				float global_y = event->motion.y;
+
+				int win_x, win_y;
+				SDL_GetGlobalMouseState(&global_x, &global_y); 
+				SDL_SetWindowPosition(ctx->window, global_x - ctx->dragOffsetX, global_y - ctx->dragOffsetY);
+			}
+		} break;
+	}
+
+	CameraManager::Instance().Input(event);
+	return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult SDL_AppIterate(void* appstate) {
+	auto ctx = reinterpret_cast<CruelerContext *>(appstate);
+
+	RenderFrame(ctx);
+
+	if (!ctx->hasHandledArguments) {
+		for (int i = 1; i < ctx->args.size(); ++i) {
+			if (std::filesystem::exists(ctx->args[i])) {
+				openFiles.push_back(FileNodeFromFilepath(ctx->args[i]));
+			}
+		}
+		ctx->hasHandledArguments = true;
+	}
+	return SDL_APP_CONTINUE;
+}
+
+void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+	auto ctx = reinterpret_cast<CruelerContext *>(appstate);
+	delete ctx;
+
+	DdzKill();
+}

@@ -9,8 +9,15 @@
 struct CTDMaterial {
     std::string shader_name;
     std::map<unsigned int, unsigned int> texture_data;
-    
-    
+
+    std::vector<std::array<float, 4>> parameters;
+    unsigned int materialDataOffset;
+
+
+    unsigned int glFramebuffer = 0;
+    unsigned int glFrametexture;
+
+    bool highlight = false;
 
 };
 
@@ -41,6 +48,26 @@ struct WMBVertexA {
         uv.v = br.ReadUINT16();
         normals = br.ReadUINT32();
         tangents = br.ReadUINT32();
+    }
+
+};
+
+struct WMB3Vertex {
+    WMBVector position; // 3 floats
+    WMBUV uv;
+    uint32_t tangents;
+    uint32_t  boneIndexes;
+    uint32_t  boneWeights;
+
+    void Read(BinaryReader& br) {
+        position.x = br.ReadFloat();
+        position.y = br.ReadFloat();
+        position.z = br.ReadFloat();
+        tangents = br.ReadUINT32();
+        uv.u = br.ReadUINT16();
+        uv.v = br.ReadUINT16();
+        boneIndexes = br.ReadUINT32();
+        boneWeights = br.ReadUINT32();
     }
 
 };
@@ -286,6 +313,7 @@ struct WMBHeader {
     uint32_t numTextures;
     uint32_t offsetMeshes;
     uint32_t numMeshes;
+    uint32_t cutdataOffset;
 
     void Read(BinaryReader& br) {
         
@@ -317,7 +345,7 @@ struct WMBHeader {
         numTextures = br.ReadUINT32();
         offsetMeshes = br.ReadUINT32();
         numMeshes = br.ReadUINT32();
-
+        cutdataOffset = br.ReadUINT32();
     }
 
 

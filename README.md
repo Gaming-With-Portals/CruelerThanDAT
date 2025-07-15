@@ -6,17 +6,16 @@
 - LY2 Editor
 - DAT Editor
 - BNK WEM Ripping
-
+- BXM Editing
+- BNK Viewer
+- CPK Reading
+  
 ## Planned Features
 - Animation Viewer
-- BNK Viewer
 - EST Editing
 - MCD Editing
-- BXM Editing
 - Game-accurate shading
-- CPK Reading
 - Game-link
-- Keyboard controls for WMB viewing
 
 ## Building From Source
 ### With Visual Studio
