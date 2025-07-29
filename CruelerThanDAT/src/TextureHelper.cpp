@@ -113,15 +113,31 @@ void TextureHelper::LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordere
 		if (identifier == 542327876) { // Microsoft DirectDraw Surface
 			wtp.Seek(offsets[i]);
 			std::vector<char> data = wtp.ReadBytes(sizes[i]);
-			glGenTextures(1, &glTextureID);
+			
 			gli::texture tex = gli::load(data.data(), data.size());
 			gli::gl GL(gli::gl::PROFILE_GL33);
 			gli::gl::format const Format = GL.translate(tex.format(), tex.swizzles());
 			GLenum target = GL.translate(tex.target());
-			glBindTexture(target, glTextureID);
-			for (std::size_t Level = 0; Level < tex.levels(); ++Level) {
-				glm::tvec3<GLsizei> extent(tex.extent(Level));
-				glCompressedTexImage2D(target, static_cast<GLint>(Level), Format.Internal, extent.x, extent.y, 0, static_cast<GLsizei>(tex.size(Level)), tex.data(0, 0, Level));
+
+			if (gli::is_target_cube(tex.target()))
+			{
+				
+			}
+			else
+			{
+				glGenTextures(1, &glTextureID);
+				glBindTexture(target, glTextureID);
+				for (std::size_t Level = 0; Level < tex.levels(); ++Level)
+				{
+					glm::tvec3<GLsizei> extent(tex.extent(Level));
+					glCompressedTexImage2D(
+						target,
+						static_cast<GLint>(Level),
+						Format.Internal,
+						extent.x, extent.y, 0,
+						static_cast<GLsizei>(tex.size(Level)),
+						tex.data(0, 0, Level));
+				}
 			}
 			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 			glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);		
@@ -303,7 +319,7 @@ void TextureHelper::LoadData(BinaryReader& wta, BinaryReader& wtp, std::unordere
 			textureMap[ids[i]] = glTextureID;
 		}
 		else {
-			CTDLog::Log::getInstance().LogError("Failed to load texture!");
+			CTDLog::Log::getInstance().LogError("Failed to load texture! (This is likely a cubemap error, and can be ignored)");
 		}			
 
 	}		

@@ -28,6 +28,7 @@
 
 const glm::uvec2 SCREEN_RESOLUTION = { 1280, 720 };
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
+std::unordered_map<int, std::string> WTA_FLAG_MAP = { {0x20000020, "Regular"}, { 0x30000020, "Transparent (Cutout)" }, { 0xa0000020, "Cubemap" }, {0x22, "Transparent"} };
 std::vector<FileNode*> openFiles;
 
 namespace HelperFunction {
@@ -75,6 +76,14 @@ namespace HelperFunction {
 		}
 		else if (fileType == 1145588546) {
 			outputFile = new BnkFileNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+		}
+		else if (fileType == 3298371) {
+			outputFile = new Ct2FileNode(fileName);
 			if (forceEndianess) {
 				outputFile->fileIsBigEndian = bigEndian;
 			}
@@ -145,7 +154,7 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
-		else if (fileType == 1481001298) {
+		else if (fileExtension == ".wem") {
 			outputFile = new WemFileNode(fileName);
 			if (forceEndianess) {
 				outputFile->fileIsBigEndian = bigEndian;
@@ -167,7 +176,7 @@ namespace HelperFunction {
 				outputFile->fileIsBigEndian = bigEndian;
 			}
 			outputFile->SetFileData(data);
-			//outputFile->LoadFile();
+			outputFile->LoadFile();
 		}
 		else if (fileType == 4674132) {
 			outputFile = new TrgFileNode(fileName);
@@ -637,18 +646,34 @@ void RenderFrame(CruelerContext *ctx) {
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WTB) {
 			ctx->viewportShow = true;
-			ImGui::Text("- Textures");
 			WtbFileNode* wtbNode = ((WtbFileNode*)FileNode::selectedNode);
-			if (ImGui::BeginListBox("##texturebox", ImVec2{ (float)ctx->winSize.x - 350.0f, (float)window_height })) {
-				for (int x = 0; x < wtbNode->textureCount; x++) {
+			ImGui::BeginTable("wtb_items", 3, ImGuiTableFlags_Borders);
+			ImGui::TableSetupColumn("Image", 32.0f);
+			ImGui::TableSetupColumn("ID");
+			ImGui::TableSetupColumn("Flag");
+			ImGui::TableHeadersRow();
 
-					ImGui::Text("ID: %i", wtbNode->textureIdx[x]);
 
+			for (int x = 0; x < wtbNode->textureCount; x++) {
+				ImGui::TableNextRow();
+				ImGui::PushID(x);
+				ImGui::TableSetColumnIndex(0);
+				ImGui::Image((ImTextureID)(intptr_t)ctx->textureMap[wtbNode->textureIdx[x]], ImVec2(32, 32));
+				ImGui::TableSetColumnIndex(1);
+				ImGui::Text("%i", wtbNode->textureIdx[x]);
+				ImGui::TableSetColumnIndex(2);
+				if (WTA_FLAG_MAP.contains(wtbNode->textureFlags[x])) {
+					ImGui::Text(WTA_FLAG_MAP[wtbNode->textureFlags[x]].c_str());
 				}
-
-
+				else {
+					ImGui::Text("0x%x", wtbNode->textureFlags[x]);
+				}
+				
+				ImGui::PopID();
 			}
-			ImGui::EndListBox();
+
+
+			ImGui::EndTable();
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::LY2) {
 			LY2FileNode* ly2Node = ((LY2FileNode*)FileNode::selectedNode);
@@ -720,14 +745,17 @@ void RenderFrame(CruelerContext *ctx) {
 					ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
 					ImGui::BeginChild("BoneSidebar", ImVec2(325, 0));
 					if (ImGui::Button("Fetch Textures")) {
-
+						
 						PopulateTextures(ctx);
+						for (CTDMaterial& mat : wmbNode->materials) {
+							mat.should_reload_materials = true;
+						}
 					}
 
 
 					int i = 0;
 					for (CTDMaterial& mat : wmbNode->materials) {
-						if (mat.glFramebuffer == 0) {
+						if (mat.glFramebuffer == 0 || mat.should_reload_materials) {
 							glEnable(GL_DEPTH_TEST);
 							static WmbFileNode* renderMesh = (WmbFileNode*)FileNodeFromFilepath("Assets/Model/preview.wmb");
 							// Create fbo and render material

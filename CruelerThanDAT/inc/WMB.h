@@ -13,7 +13,7 @@ struct CTDMaterial {
     std::vector<std::array<float, 4>> parameters;
     unsigned int materialDataOffset;
 
-
+    bool should_reload_materials = false;
     unsigned int glFramebuffer = 0;
     unsigned int glFrametexture;
 

@@ -287,6 +287,8 @@ void FileNode::ReplaceFile() {
 
 	ImGui::CloseCurrentPopup();
 
+	LoadFile();
+
 }
 
 void FileNode::PopupOptions(CruelerContext *ctx) {
@@ -302,9 +304,24 @@ void FileNode::PopupOptions(CruelerContext *ctx) {
 				closeNode(this);
 			}
 		}
+
 		else {
 			if (ImGui::Button("Replace", ImVec2(150, 20))) {
 				ReplaceFile();
+				isEdited = true;
+			}
+			if (parent) {
+				if (ImGui::Button("Delete", ImVec2(150, 20))) {
+
+					auto it = std::find(parent->children.begin(), parent->children.end(), this);
+					if (it != parent->children.end()) {
+						parent->children.erase(it);
+					}
+
+					delete this;
+				}
+
+
 			}
 		}
 
@@ -1304,7 +1321,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		fileIcon = ICON_CI_FILE_MEDIA;
 		nodeType = WTB;
 		TextColor = { 1.0f, 0.0f, 0.7f, 1.0f };
-		fileFilter = L"Texture Container(*.wtb)\0*.wtb;\0";
+		fileFilter = L"Texture Container(*.wtb, *.wta)\0*.wtb;*.wta;\0";
 	}
 	void WtbFileNode::LoadFile() {
 		BinaryReader reader(fileData, false);
@@ -1343,11 +1360,11 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 			}
 
 
-			for (int x = 0; x < textureCount; x++) {
+			/*for (int x = 0; x < textureCount; x++) {
 				reader.Seek(textureOffsets[x]);
 				textureData.push_back(reader.ReadBytes(textureSizes[x]));
 
-			}
+			}*/
 
 
 
@@ -1363,7 +1380,8 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 	WemFileNode::WemFileNode(std::string fName) : FileNode(fName) {
 		fileIcon = ICON_CI_MUSIC;
 		nodeType = WEM;
-		fileFilter = L"WWISE Audio Container(*.wem)\0*.wem;\0";
+		fileFilter = L"WWISE Audio Container (*.wem)\0*.wem\0"
+			L"WAV Audio Files (*.wav)\0*.wav\0";
 	}
 	void WemFileNode::LoadFile() {
 
@@ -1371,6 +1389,73 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 	void WemFileNode::SaveFile() {
 
 	}
+
+	void WemFileNode::ReplaceFile()
+	{
+		OPENFILENAME ofn;
+		wchar_t szFile[260] = { 0 };
+		LPWSTR pFile = szFile;
+
+		mbstowcs_s(0, pFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
+
+		ZeroMemory(&ofn, sizeof(OPENFILENAME));
+
+		ofn.lpstrFile = pFile;
+		ofn.lStructSize = sizeof(OPENFILENAME);
+		ofn.hwndOwner = NULL;
+		ofn.nMaxFile = 260;
+		ofn.lpstrFilter = fileFilter;
+
+		ofn.nFilterIndex = 1;
+		ofn.Flags = OFN_PATHMUSTEXIST;
+		int conversion_status = -1;
+		if (GetOpenFileName(&ofn) == TRUE) {
+			std::wstring title = (ofn.lpstrFile);
+			size_t extensionsplitter = title.find_last_of(L".");
+			std::wstring extension;
+			if (extensionsplitter != std::wstring::npos) {
+				extension = title.substr(extensionsplitter + 1);
+			}
+
+			if (extension == L"wem") {
+				conversion_status = 1;
+			}
+			else if (extension == L"wav") {
+				conversion_status = 2;
+			}
+			else {
+				conversion_status = -1;
+			}
+
+
+
+			if (conversion_status == 1) {
+				std::ifstream file(ofn.lpstrFile, std::ios::binary | std::ios::ate);
+				if (file.is_open()) {
+					fileData.clear();
+					std::streamsize size = file.tellg();
+					fileData.resize(size);
+					file.seekg(0, std::ios::beg);
+					file.read(fileData.data(), size);
+					file.close();
+					std::cout << "Replaced file! " << std::endl;
+				}
+				else {
+					std::cout << "Error" << std::endl;
+				}
+			}
+			else {
+				CTDLog::Log::getInstance().LogError("Failed to replace WEM file (incorrect type or failed conversion)");
+			}
+
+
+		}
+
+		ImGui::CloseCurrentPopup();
+
+		LoadFile();
+	}
+
 
 	MGRVector DecodeNormalWMB0(uint32_t packed) {
 		int8_t nz = (int8_t)((packed >> 0) & 0xFF);
@@ -2229,6 +2314,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 			}
 
 			for (WMBTexture& tex : textureMappings) {
+
 				cmat.texture_data[tex.flag] = textures[tex.id].id;
 
 			}
@@ -2574,98 +2660,6 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 				ExportFile();
 			}
 
-			if (ImGui::Button("Export (FBX)", ImVec2(150, 20))) {
-				FbxManager* manager = FbxManager::Create();
-				FbxScene* scene = FbxScene::Create(manager, "WMB");
-				scene->GetGlobalSettings().SetSystemUnit(FbxSystemUnit::m);
-				FbxIOSettings* ios = FbxIOSettings::Create(manager, IOSROOT);
-				manager->SetIOSettings(ios);
-				ios->SetBoolProp(EXP_FBX_EMBEDDED, true);
-
-
-
-				for (CruelerMesh* cmesh : displayMeshes) {
-					for (CruelerBatch* batch : cmesh->batches) {
-						// TODO: GLTF
-						FbxSurfaceLambert* material = FbxSurfaceLambert::Create(scene, (cmesh->name + "_material").c_str());
-						HelperFunction::WriteVectorToFile(ctx->rawTextureInfo[materials[batch->materialID].texture_data[0]], ("temp\\" + std::to_string(materials[batch->materialID].texture_data[0])));
-						HelperFunction::WriteVectorToFile(ctx->rawTextureInfo[materials[batch->materialID].texture_data[2]], ("temp\\" + std::to_string(materials[batch->materialID].texture_data[2])));
-						FbxFileTexture* abTexture = FbxFileTexture::Create(scene, "Albdeo");
-						abTexture->SetFileName(("temp\\" + std::to_string(materials[batch->materialID].texture_data[0])).c_str());
-						abTexture->SetTextureUse(FbxTexture::eStandard);
-						abTexture->SetMappingType(FbxTexture::eUV);
-						abTexture->SetMaterialUse(FbxFileTexture::eModelMaterial);
-						abTexture->SetAlphaSource(FbxFileTexture::eNone);
-						abTexture->SetSwapUV(false);
-						material->Diffuse.ConnectSrcObject(abTexture);
-						material->DiffuseFactor.Set(1.0);
-						FbxFileTexture* nmTexture = FbxFileTexture::Create(scene, "Normal");
-						nmTexture->SetFileName(("temp\\" + std::to_string(materials[batch->materialID].texture_data[2])).c_str());
-						nmTexture->SetTextureUse(FbxTexture::eBumpNormalMap);
-						nmTexture->SetMappingType(FbxTexture::eUV);
-						nmTexture->SetMaterialUse(FbxFileTexture::eModelMaterial);
-						nmTexture->SetAlphaSource(FbxFileTexture::eNone);
-						nmTexture->SetSwapUV(false);
-						material->BumpFactor.Set(1.0);
-
-						material->NormalMap.ConnectSrcObject(nmTexture);
-
-						
-
-						material->TransparencyFactor.Set(0.0);
-						material->TransparentColor.Set(FbxDouble3(0.0, 0.0, 0.0));
-						
-
-						FbxMesh* mesh = FbxMesh::Create(scene, (cmesh->name + "_mesh").c_str());
-						
-						FbxGeometryElementUV* lUVDiffuseElement = mesh->CreateElementUV("Float2");
-						
-						FBX_ASSERT(lUVDiffuseElement != NULL);
-						lUVDiffuseElement->SetMappingMode(FbxGeometryElement::eByControlPoint);
-						lUVDiffuseElement->SetReferenceMode(FbxGeometryElement::eDirect);
-
-
-						mesh->InitControlPoints(static_cast<int>(batch->vertexes.size()));
-						for (int i = 0; i < batch->vertexes.size(); i++) {
-							mesh->SetControlPointAt(FbxVector4(batch->vertexes[i].x, batch->vertexes[i].y, batch->vertexes[i].z), i);
-							lUVDiffuseElement->GetDirectArray().Add(FbxVector2(batch->vertexes[i].u, 1.0 - batch->vertexes[i].v));
-						}
-
-						lUVDiffuseElement->GetIndexArray().SetCount(static_cast<int>(batch->indexes.size()));
-
-						for (int i = 0; i < batch->indexes.size(); i+=3) {
-							mesh->BeginPolygon();
-							int idx0 = batch->indexes[i];
-							int idx1 = batch->indexes[i + 1];
-							int idx2 = batch->indexes[i + 2];
-
-							mesh->AddPolygon(idx0);
-							mesh->AddPolygon(idx1);
-							mesh->AddPolygon(idx2);
-
-							mesh->EndPolygon();
-
-						}
-
-
-						 
-
-						FbxNode* meshNode = FbxNode::Create(scene, cmesh->name.c_str());
-						meshNode->AddMaterial(material);
-						meshNode->SetNodeAttribute(mesh);
-						scene->GetRootNode()->AddChild(meshNode);
-
-					}
-				}
-				
-
-				FbxExporter* exporter = FbxExporter::Create(manager, "");
-				exporter->Initialize("output.fbx", -1, manager->GetIOSettings());
-				exporter->Export(scene);
-				exporter->Destroy();
-
-			}
-
 			/*if (ImGui::Button("Send to MGR2Blender", ImVec2(150, 20))) {
 
 
@@ -2678,6 +2672,20 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 				std::string command = "\"" + blenderPath + "\" --python \"" + "blender_launcher.py" + "\"";
 				system(command.c_str());
 			}*/
+
+			if (parent) {
+				if (ImGui::Button("Delete", ImVec2(150, 20))) {
+
+					auto it = std::find(parent->children.begin(), parent->children.end(), this);
+					if (it != parent->children.end()) {
+						parent->children.erase(it);
+					}
+
+					delete this;
+				}
+
+
+			}
 
 			if (it != openFiles.end()) { // Ensure it exists before erasing
 				if (ImGui::Button("Close", ImVec2(150, 20))) {
@@ -3477,7 +3485,7 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 			Data002Blob = new WWISE::Data002BlobData();
 			Data002Blob->Load();
 		}
-
+		
 
 		BinaryReader reader(fileData, fileIsBigEndian);
 		reader.Seek(0x4);
@@ -3573,56 +3581,6 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		}
 
 
-
-
-		/*std::string tmpHeader = "";
-		int tmpLength = headerLength;
-		reader.Seek(0x8);
-		while (tmpHeader != "DIDX") {
-			int offset = reader.Tell();
-			reader.Seek(offset + headerLength);
-			if (offset + headerLength + 4 >= fileData.size()) {
-				break;
-			}
-
-			tmpHeader = reader.ReadString(4);
-			tmpLength = reader.ReadUINT32();
-		}
-
-
-
-
-		// Checking the final header is actually DIDX
-		if (tmpHeader == "DIDX") {
-			if (tmpLength > 0) {
-				int wemCount = (tmpLength / 12);
-				for (int i = 0; i < wemCount; i++) {
-					wemIDs.push_back(reader.ReadUINT32());
-					wemOffsets.push_back(reader.ReadUINT32());
-					wemSizes.push_back(reader.ReadUINT32());
-				}
-				reader.ReadUINT32();
-				reader.ReadUINT32();
-				int baseOffset = reader.Tell();
-
-
-				for (int i = 0; i < wemCount; i++) {
-					reader.Seek(wemOffsets[i] + baseOffset);
-					std::string wemName = std::to_string(wemIDs[i]) + ".wem";
-					FileNode* childNode = HelperFunction::LoadNode(wemName, reader.ReadBytes(wemSizes[i]), false, false);
-					if (childNode) {
-						children.push_back(childNode);
-					}
-
-				}
-
-			}
-
-
-
-		}*/
-
-
 	}
 
 	std::string BnkFileNode::GetBNKHircID(BnkHircObject obj) {
@@ -3668,6 +3626,68 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 	}
 
 	void BnkFileNode::SaveFile() {
+		bool shouldRepack = false;
+		for (FileNode* node : children) {
+			if (node->isEdited) {
+				shouldRepack = true;
+				break;
+			}
+		}
+		if (!shouldRepack) return;
+
+		std::unordered_map<std::string, std::vector<char>> chunk_datas;
+		BinaryReader reader(fileData, fileIsBigEndian);
+		while (true) {
+
+			if (reader.EndOfBuffer()) break;
+
+			std::string chunkID = reader.ReadString(4);
+			uint32_t chunkSize = reader.ReadUINT32();
+			chunk_datas[chunkID] = reader.ReadBytes(chunkSize);
+
+		}
+
+
+		BinaryWriter* writer = new BinaryWriter(fileIsBigEndian);
+		uint32_t totalDataChunkSize = 0;
+		for (const auto& data : chunk_datas) {
+			if (data.first + "\0" != "DATA" && data.first + "\0" != "DIDX") {
+				writer->WriteString(data.first);
+				writer->WriteUINT32(data.second.size());
+				writer->WriteBytes(data.second);
+			}
+			else if (data.first == "DIDX") {
+				writer->WriteString(data.first);
+				writer->WriteUINT32(children.size() * 12);
+				uint32_t offsetTicker = 0;
+				for (FileNode* node : children) {
+					uint32_t wemID = 0;
+					size_t extensionsplitter = node->fileName.find_last_of(".");
+					if (extensionsplitter != std::string::npos) {
+						wemID = std::stoi(node->fileName.substr(0, extensionsplitter));
+					}
+					
+					writer->WriteUINT32(wemID);
+					writer->WriteUINT32(offsetTicker);
+					writer->WriteUINT32(node->fileData.size());
+					offsetTicker += node->fileData.size();
+
+
+				}
+				totalDataChunkSize = offsetTicker;
+			}
+			else if (data.first == "DATA") {
+				writer->WriteString(data.first);
+				writer->WriteUINT32(totalDataChunkSize);
+				for (FileNode* node : children) {
+					writer->WriteBytes(node->fileData);
+				}
+
+			}
+		}
+		
+		fileData = writer->GetData();
+		delete writer;
 
 	}
 
@@ -3893,6 +3913,15 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 
 	void TrgFileNode::LoadFile()
 	{
+		BinaryReader reader(fileData, false);
+		reader.Seek(0x4);
+		if (reader.ReadUINT32() == 17) {
+			uint32_t triggerCount = reader.ReadUINT32();
+
+
+		}
+
+
 	}
 
 	void TrgFileNode::SaveFile()
@@ -4094,7 +4123,7 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 			clpHeader.m_gravityVec.y = reader.ReadFloat();
 			clpHeader.m_gravityVec.z = reader.ReadFloat();
 			clpHeader.m_GravityPartsNo = reader.ReadUINT32();
-			clpHeader.m_FirstBundleRate = reader.ReadUINT32();
+			clpHeader.m_FirstBundleRate = reader.ReadFloat();
 			clpHeader.m_WindVec.x = reader.ReadFloat();
 			clpHeader.m_WindVec.y = reader.ReadFloat();
 			clpHeader.m_WindVec.z = reader.ReadFloat();
@@ -4125,6 +4154,52 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 
 	void BayoClpClhClwFileNode::SaveFile()
 	{
+		if (type == B1_CLP) {
+			BinaryWriter* writer = new BinaryWriter(fileIsBigEndian);
+
+			writer->WriteUINT32(clpHeader.works.size());
+			writer->WriteFloat(clpHeader.m_LimitSpringRate);
+			writer->WriteFloat(clpHeader.m_SpdRate);
+			writer->WriteFloat(clpHeader.m_Stretchy);
+			writer->WriteUINT16(clpHeader.m_BundleNum);
+			writer->WriteUINT16(clpHeader.m_BundleNum2);
+			writer->WriteFloat(clpHeader.m_Thick);
+			writer->WriteFloat(clpHeader.m_gravityVec.x);
+			writer->WriteFloat(clpHeader.m_gravityVec.y);
+			writer->WriteFloat(clpHeader.m_gravityVec.z);
+			writer->WriteUINT32(clpHeader.m_GravityPartsNo);
+			writer->WriteFloat(clpHeader.m_FirstBundleRate);
+			writer->WriteFloat(clpHeader.m_WindVec.x);
+			writer->WriteFloat(clpHeader.m_WindVec.y);
+			writer->WriteFloat(clpHeader.m_WindVec.z);
+			writer->WriteUINT32(clpHeader.m_WindPartsNo);
+			writer->WriteFloat(clpHeader.m_WindOffset.x);
+			writer->WriteFloat(clpHeader.m_WindOffset.y);
+			writer->WriteFloat(clpHeader.m_WindOffset.z);
+			writer->WriteFloat(clpHeader.m_WindSin);
+			writer->WriteFloat(clpHeader.m_HitAdjustRate);
+
+			for (Bayo1ClpUnit& unit : clpHeader.works) {
+				writer->WriteUINT16(unit.no);
+				writer->WriteUINT16(unit.noUp);
+				writer->WriteUINT16(unit.noDown);
+				writer->WriteUINT16(unit.noSide);
+				writer->WriteUINT16(unit.noPoly);
+				writer->WriteUINT16(unit.noFix);
+				writer->WriteFloat(unit.rotLimit);
+				writer->WriteFloat(unit.offset.x);
+				writer->WriteFloat(unit.offset.y);
+				writer->WriteFloat(unit.offset.z);
+			}
+
+
+			fileData = writer->GetData();
+			delete writer;
+
+		}
+
+
+
 	}
 
 	void BayoClpClhClwFileNode::RenderGUI(CruelerContext* ctx)
@@ -4291,4 +4366,43 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 
 		}
 
+	}
+
+	Ct2FileNode::Ct2FileNode(std::string fName) : FileNode(fName)
+	{
+		fileIcon = ICON_CI_PACKAGE;
+		TextColor = { 0.529f, 0, 0.724f, 1.0f };
+		nodeType = CT2;
+		fileFilter = L"Cubemap Texture Package (*.ctx)\0*.ctx;\0";
+	}
+
+	void Ct2FileNode::LoadFile()
+	{
+		BinaryReader reader(fileData, true);
+		reader.SetEndianess(fileIsBigEndian);
+
+		reader.Seek(0x4);
+		uint32_t texture_count = reader.ReadUINT32();
+		std::vector<uint32_t> offsets;
+		for (uint32_t i = 0; i < texture_count; i++) {
+			offsets.push_back(reader.ReadUINT32());
+		}
+		
+		int i = 0;
+		for (uint32_t offset : offsets) {
+
+			
+			reader.Seek(offset);
+			WtbFileNode* wtbNode = new WtbFileNode(std::to_string(i) + ".wtb");
+			wtbNode->SetFileData(reader.ReadBytes(512000));
+			wtbNode->LoadFile();
+			children.push_back(wtbNode);
+			i += 1;
+		}
+
+
+	}
+
+	void Ct2FileNode::SaveFile()
+	{
 	}

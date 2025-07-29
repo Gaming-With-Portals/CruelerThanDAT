@@ -131,7 +131,8 @@ enum FileNodeTypes {
 	TRG,
 	EST,
 	B1EFF,
-	B1PHYS
+	B1PHYS,
+	CT2
 };
 
 enum TextureStorageMode {
@@ -233,7 +234,7 @@ public:
 	std::vector<LY2Node> nodes;
 	std::vector<LY2ExData> extradata;
 
-	char input_id[7];
+	char input_id[7] = {};
 
 
 	LY2FileNode(std::string fName);
@@ -598,7 +599,7 @@ public:
 	WemFileNode(std::string fName);
 	void LoadFile() override;
 	void SaveFile() override;
-
+	void ReplaceFile() override;
 };
 
 struct CruelerBone {
@@ -651,6 +652,21 @@ enum WmbVersionFormat {
 	WMB0_BAY2
 };
 
+struct TrgEntry {
+	int field_0;
+	int field_4;
+	int field_8;
+	unsigned int m_phaseHash;
+	int field_10;
+	unsigned int m_actionPhaseHash;
+	float field_18;
+	int field_1C;
+	int conditionToActionSize;
+	int conditionID;
+	int actionToNextTrgSize;
+	int ActionMovie;
+};
+
 class TrgFileNode : public FileNode {
 public:
 	TrgFileNode(std::string fName);
@@ -659,6 +675,12 @@ public:
 
 };
 
+class Ct2FileNode : public FileNode {
+public:
+	Ct2FileNode(std::string fName);
+	void LoadFile() override;
+	void SaveFile() override;
+};
 
 class WmbFileNode : public FileNode {
 private:
@@ -786,8 +808,6 @@ public:
 
 	void SaveFile() override;
 };
-
-
 
 class DatFileNode : public FileNode {
 public:
