@@ -1,7 +1,7 @@
 #pragma once
 
 #include "pch.hpp"
-
+#include "Criware.h"
 #include <imgui.h>
 #include <thread>
 #include <future>
@@ -75,27 +75,6 @@ struct CRIFOLDER {
 	std::string name = "";
 	std::unordered_map<std::string, CRIFOLDER> subfolders;
 	std::vector<CRIFILE> files;
-};
-
-enum COLUMN_FLAGS : uint8_t {
-	STORAGE_MASK = 0xF0,
-	STORAGE_NONE = 0x00,
-	STORAGE_PERROW = 0x20,
-	STORAGE_CONSTANT = 0x30,
-	STORAGE_ZERO = 0x10,
-
-	TYPE_MASK = 0x0f,
-	TYPE_DATA = 0x0b,
-	TYPE_STRING = 0x0a,
-	TYPE_FLOAT = 0x08,
-	TYPE_8BYTE2 = 0x07,
-	TYPE_8BYTE = 0x06,
-	TYPE_4BYTE2 = 0x05,
-	TYPE_4BYTE = 0x04,
-	TYPE_2BYTE2 = 0x03,
-	TYPE_2BYTE = 0x02,
-	TYPE_1BYTE2 = 0x01,
-	TYPE_1BYTE = 0x00,
 };
 
 class CPKManager {

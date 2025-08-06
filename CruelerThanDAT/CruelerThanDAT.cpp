@@ -162,6 +162,14 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
+		else if (fileExtension == ".acb") {
+			outputFile = new AcbFileNode(fileName);
+			if (forceEndianess) {
+				outputFile->fileIsBigEndian = bigEndian;
+			}
+			outputFile->SetFileData(data);
+			outputFile->LoadFile();
+		}
 		else if (fileType == 3294789) {
 			outputFile = new BayoEffNode(fileName);
 			if (forceEndianess) {
@@ -698,6 +706,11 @@ void RenderFrame(CruelerContext *ctx) {
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::B1PHYS) {
 			BayoClpClhClwFileNode* physNode = ((BayoClpClhClwFileNode*)FileNode::selectedNode);
 			physNode->RenderGUI(ctx);
+
+		}
+		else if (FileNode::selectedNode->nodeType == FileNodeTypes::ACB) {
+			AcbFileNode* bnkNode = ((AcbFileNode*)FileNode::selectedNode);
+			bnkNode->RenderGUI(ctx);
 
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WMB) {

@@ -22,6 +22,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <Camera.h>
+#include <assimp/Importer.hpp>
+#include <assimp/Exporter.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 const FbxSystemUnit fbxsdk::FbxSystemUnit::m(100.0);
 
@@ -2651,6 +2655,132 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 	}
 
+	void MeshDataFromCTDVertex(aiMesh* mesh, const std::vector<CUSTOMVERTEX>& customVerts, const std::vector<unsigned int>& indices) {
+		mesh->mNumVertices = customVerts.size();
+		mesh->mVertices = new aiVector3D[mesh->mNumVertices];
+		mesh->mNormals = new aiVector3D[mesh->mNumVertices];
+		mesh->mTextureCoords[0] = new aiVector3D[mesh->mNumVertices];
+		mesh->mNumUVComponents[0] = 2;
+		mesh->mTextureCoords[1] = new aiVector3D[mesh->mNumVertices];
+		mesh->mNumUVComponents[1] = 2;
+		mesh->mTangents = new aiVector3D[mesh->mNumVertices];
+		mesh->mBitangents = new aiVector3D[mesh->mNumVertices];
+
+		for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+			const CUSTOMVERTEX& v = customVerts[i];
+			mesh->mVertices[i] = aiVector3D(v.x, v.y, v.z);
+			mesh->mNormals[i] = aiVector3D(v.nx, v.ny, v.nz);
+			mesh->mTextureCoords[0][i] = aiVector3D(v.u, v.v, 0.0f);
+			mesh->mTextureCoords[1][i] = aiVector3D(v.u2, v.v2, 0.0f);
+			mesh->mTangents[i] = aiVector3D(v.tx, v.ty, v.tz);
+
+			aiVector3D normal(v.nx, v.ny, v.nz);
+			aiVector3D tangent(v.tx, v.ty, v.tz);
+			aiVector3D bitangent = normal ^ tangent;
+			mesh->mBitangents[i] = bitangent;
+		}
+
+		mesh->mNumFaces = indices.size() / 3;
+		mesh->mFaces = new aiFace[mesh->mNumFaces];
+		for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
+			aiFace& face = mesh->mFaces[i];
+			face.mNumIndices = 3;
+			face.mIndices = new unsigned int[3] {
+				indices[i * 3], indices[i * 3 + 1], indices[i * 3 + 2]
+				};
+		}
+	}
+
+	void WmbFileNode::WMBToASSIMP()
+	{
+		if (wmbVersion != WMB4_MGRR) {
+			CTDLog::Log::getInstance().LogError("WMB format not supported for export.");
+			return;
+		}
+		aiScene* scene = new aiScene();
+
+		scene->mRootNode = new aiNode();
+		scene->mRootNode->mName = aiString(fileName);
+
+		scene->mMaterials = new aiMaterial * [1];
+		scene->mMaterials[0] = new aiMaterial();
+		scene->mNumMaterials = 1;
+
+		size_t totalMeshes = 0;
+		for (CruelerMesh* cmesh : displayMeshes) {
+			totalMeshes += cmesh->batches.size();
+		}
+
+		scene->mNumMeshes = totalMeshes;
+		scene->mMeshes = new aiMesh * [totalMeshes];
+
+		// Create the armature node
+		aiNode* armatureNode = new aiNode("Armature");
+
+		// The root node will have two types of children: the armature node and the mesh nodes.
+		scene->mRootNode->mNumChildren = totalMeshes + 1; // 1 for the armature, and totalMeshes for the meshes
+		scene->mRootNode->mChildren = new aiNode * [totalMeshes + 1];
+
+		// Assign the armature node as the first child of the root node
+		scene->mRootNode->mChildren[0] = armatureNode;
+		armatureNode->mParent = scene->mRootNode;
+
+		// The armature node will contain all the bone nodes
+		armatureNode->mNumChildren = totalMeshes;
+		armatureNode->mChildren = new aiNode * [totalMeshes];
+
+		size_t mesh_index = 0;
+		for (CruelerMesh* cmesh : displayMeshes) {
+			size_t batch_index = 0;
+			for (CruelerBatch* cbatch : cmesh->batches) {
+				aiMesh* mesh = new aiMesh();
+				std::vector<unsigned int> indices32(cbatch->indexes.begin(), cbatch->indexes.end());
+
+				MeshDataFromCTDVertex(mesh, cbatch->vertexes, indices32);
+				mesh->mMaterialIndex = 0;
+				scene->mMeshes[mesh_index] = mesh;
+
+				// Create a node for the bone and make it a child of the armature node
+				std::string boneName = "Bone_" + std::to_string(mesh_index); // Use mesh_index for bone_index
+				aiNode* boneNode = new aiNode(boneName);
+				boneNode->mParent = armatureNode;
+				armatureNode->mChildren[mesh_index] = boneNode; // mesh_index for bone node
+
+				// Create the aiBone object attached to the mesh
+				mesh->mNumBones = 1;
+				mesh->mBones = new aiBone * [1];
+				aiBone* bone = mesh->mBones[0] = new aiBone();
+				bone->mName = aiString(boneName); // CRITICAL: Bone name must match node name
+				bone->mOffsetMatrix = aiMatrix4x4();
+
+				bone->mNumWeights = mesh->mNumVertices;
+				bone->mWeights = new aiVertexWeight[mesh->mNumVertices];
+				for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
+					bone->mWeights[v].mVertexId = v;
+					bone->mWeights[v].mWeight = 1.0f;
+				}
+
+				// Create a node for the mesh and make it a child of the root node
+				aiNode* meshNode = new aiNode(cmesh->name + "_" + std::to_string(batch_index));
+				meshNode->mParent = scene->mRootNode;
+				meshNode->mMeshes = new unsigned int[1] { static_cast<unsigned int>(mesh_index) };
+				meshNode->mNumMeshes = 1;
+				scene->mRootNode->mChildren[mesh_index + 1] = meshNode; // Offset by 1 for the armature node
+
+				batch_index++;
+				mesh_index++;
+			}
+		}
+
+		Assimp::Exporter exporter;
+		if (exporter.Export(scene, "glb", "model.glb") == aiReturn_SUCCESS) {
+			
+		}
+		else {
+			CTDLog::Log::getInstance().LogError(exporter.GetErrorString());
+		}
+	}
+
 
 	void WmbFileNode::PopupOptions(CruelerContext *ctx) {
 		auto it = std::find(openFiles.begin(), openFiles.end(), this);
@@ -2659,19 +2789,10 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 			if (ImGui::Button("Export (WMB)", ImVec2(150, 20))) {
 				ExportFile();
 			}
+			if (ImGui::Button("Export (FBX)", ImVec2(150, 20))) {
+				WMBToASSIMP();
 
-			/*if (ImGui::Button("Send to MGR2Blender", ImVec2(150, 20))) {
-
-
-
-				std::ofstream script("blender_launcher.py");
-				script << "import bpy\n";
-				script << "bpy.ops.import_scene.wmb_data(filepath=r'" << modelPath << "', reset_blend=True)\n";
-				script.close();
-
-				std::string command = "\"" + blenderPath + "\" --python \"" + "blender_launcher.py" + "\"";
-				system(command.c_str());
-			}*/
+			}
 
 			if (parent) {
 				if (ImGui::Button("Delete", ImVec2(150, 20))) {
@@ -4405,4 +4526,139 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 
 	void Ct2FileNode::SaveFile()
 	{
+	}
+
+	SdxFileNode::SdxFileNode(std::string fName) : FileNode(fName)
+	{
+
+	}
+
+	void SdxFileNode::LoadFile()
+	{
+		BinaryReader reader(fileData, true);
+		reader.SetEndianess(fileIsBigEndian);
+		reader.Seek(40);
+		uint32_t acb_data_offset = reader.ReadUINT32();
+
+		
+
+
+	}
+
+	void SdxFileNode::SaveFile()
+	{
+	}
+
+	AcbFileNode::AcbFileNode(std::string fName) : FileNode(fName)
+	{
+		fileIcon = ICON_CI_PACKAGE;
+		TextColor = { 0.0f, 0.529f, 0.724f, 1.0f };
+		nodeType = ACB;
+		fileFilter = L"CriWare ADX Info(*.acb)\0*.acb;\0";
+	}
+
+	void AcbFileNode::LoadFile()
+	{
+		BinaryReader reader(fileData, true);
+		
+		header.Load(reader);
+
+		std::vector<char> cntdat = std::get<std::vector<char>>(header.row_map[0]["CueNameTable"].GetValue());
+		BinaryReader cnt(cntdat, true);
+		CueNameTable.Load(cnt);
+
+		std::vector<char> ctdat = std::get<std::vector<char>>(header.row_map[0]["CueTable"].GetValue());
+		BinaryReader ct(ctdat, true);
+		CueTable.Load(ct);
+
+		std::vector<char> awbdat = std::get<std::vector<char>>(header.row_map[0]["AwbFile"].GetValue());
+		BinaryReader awb(awbdat, false);
+
+		if (awb.ReadString(4) == "AFS2") {
+			awb.ReadUINT32(); // flags
+			uint32_t awb_entry_count = awb.ReadUINT32();
+			awb_align = awb.ReadUINT32();
+
+			std::vector<uint16_t> entry_ids(awb_entry_count);
+			std::vector<uint32_t> entry_offsets(awb_entry_count + 1);
+			for (uint32_t i = 0; i < awb_entry_count; i++) {
+				entry_ids[i] = awb.ReadUINT16();
+			}
+			for (uint32_t i = 0; i < awb_entry_count; i++) {
+				entry_offsets[i] = awb.ReadUINT32();
+			}
+
+			entry_offsets[awb_entry_count] = awb.ReadUINT32();
+
+			for (uint32_t i = 0; i < awb_entry_count; i++) {
+				awb_entries[entry_ids[i]] = entry_offsets[i];
+			}
+
+			awb_entries[0xFFFF] = entry_offsets[awb_entry_count];
+		}
+
+
+		return;
+	}
+
+	void AcbFileNode::SaveFile()
+	{
+	}
+
+	void AcbFileNode::RenderGUI(CruelerContext* ctx) {
+		
+
+		ImGui::SeparatorText("ACB Properties");
+		ImGui::Text("ID: %d", std::get<std::uint32_t>(header.row_map[0]["FileIdentifier"].GetValue()));
+		ImGui::Text("Version: %d", std::get<std::uint32_t>(header.row_map[0]["Version"].GetValue()));
+		ImGui::Text("Target: %d", std::get<std::uint8_t>(header.row_map[0]["Target"].GetValue()));
+		ImGui::Text("Volume: %f", std::get<float>(header.row_map[0]["AcbVolume"].GetValue()));
+		ImGui::Text("Name: %s", std::get<std::string>(header.row_map[0]["Name"].GetValue()).c_str());
+
+		ImGui::SeparatorText("Cues");
+		if (ImGui::BeginTable("CueTable", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable)) {
+			ImGui::TableSetupColumn("Cue Index");
+			ImGui::TableSetupColumn("Cue Name");
+			ImGui::TableSetupColumn("Cue Audio ID");
+			ImGui::TableSetupColumn("Cue Audio");
+			ImGui::TableHeadersRow();
+
+			for (int i = 0; i < CueNameTable.row_count; i++) {
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0); 
+				ImGui::Text("%d", std::get<uint16_t>(CueNameTable.row_map[i]["CueIndex"].GetValue()));
+
+				ImGui::TableSetColumnIndex(1);
+				ImGui::Text("%s", std::get<std::string>(CueNameTable.row_map[i]["CueName"].GetValue()).c_str());
+
+				ImGui::TableSetColumnIndex(2);
+
+				ImGui::Text("%d", std::get<uint16_t>(CueTable.row_map[i]["ReferenceIndex"].GetValue()));
+
+				ImGui::TableSetColumnIndex(3);
+
+				if (awb_entries.find(std::get<uint16_t>(CueTable.row_map[i]["ReferenceIndex"].GetValue())) != awb_entries.end()) {
+					if (ImGui::Button(("Play###" + std::to_string(i)).c_str())) {
+						std::vector<char> awbdat = std::get<std::vector<char>>(header.row_map[0]["AwbFile"].GetValue());
+						BinaryReader awb(awbdat, false);
+						uint32_t awid = std::get<uint16_t>(CueTable.row_map[i]["ReferenceIndex"].GetValue());
+
+						size_t awb_position = (awb_entries[awid] + awb_align - 1) & ~(awb_align - 1);
+						size_t awb_size = awb_entries[awid + 1] - awb_position;
+						awb.Seek(awb_position);
+
+
+						std::vector<char> awbfiledata = awb.ReadBytes(awb_size);
+						std::ofstream outfile("F:\\audio.adx", std::ios::binary);
+						outfile.write(awbfiledata.data(), awbfiledata.size());
+						outfile.close();
+
+
+					}
+				}
+				
+			}
+
+		}
+		ImGui::EndTable();
 	}

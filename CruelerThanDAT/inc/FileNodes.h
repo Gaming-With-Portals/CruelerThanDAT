@@ -16,6 +16,7 @@
 #include "WMB.h"
 #include "CTDModel.h"
 #include "UID.h"
+#include "Criware.h"
 #include "UVD.h"
 #include <Wwise/wwise.h>
 #include <glad/glad.h>
@@ -132,7 +133,9 @@ enum FileNodeTypes {
 	EST,
 	B1EFF,
 	B1PHYS,
-	CT2
+	CT2,
+	ACB,
+	SDX
 };
 
 enum TextureStorageMode {
@@ -713,7 +716,7 @@ public:
 
 	void LoadFile() override;
 	void SaveFile() override;
-
+	void WMBToASSIMP();
 
 	void PopupOptions(CruelerContext *ctx) override;
 
@@ -807,6 +810,38 @@ public:
 	void RenderGUI(CruelerContext *ctx);
 
 	void SaveFile() override;
+};
+
+class SdxFileNode : public FileNode {
+public:
+	SdxFileNode(std::string fName);
+
+	void LoadFile() override;
+
+	void SaveFile() override;
+};
+
+struct AwbEntry {
+	uint32_t id;
+	uint32_t offset;
+};
+
+class AcbFileNode : public FileNode {
+private:
+	uint32_t awb_align;
+	CriTOC header;
+	CriTOC CueNameTable;
+	CriTOC CueTable;
+	std::unordered_map<uint32_t, uint32_t> awb_entries;
+
+public:
+	AcbFileNode(std::string fName);
+
+	void LoadFile() override;
+
+	void SaveFile() override;
+
+	void RenderGUI(CruelerContext* ctx);
 };
 
 class DatFileNode : public FileNode {

@@ -52,6 +52,7 @@ workspace "CruelerThanDAT"
 					path.join(fbx,		"lib/x64/debug/"),
 					"depends/SDL3/lib/x64/",
 					"depends/ddz/",
+					"depends/assimp/lib/",
 					"build-curl/%{cfg.longname}/lib/",
 				}
 				
@@ -68,6 +69,7 @@ workspace "CruelerThanDAT"
 					path.join(fbx,		"lib/x64/release/"),
 					"depends/SDL3/lib/x64/",
 					"depends/ddz/",
+					"depends/assimp/lib/",
 					"build-curl/%{cfg.longname}/lib/",
 				}
 				
@@ -109,6 +111,7 @@ workspace "CruelerThanDAT"
 					path.join(fbx,		"lib/x64/debug/"),
 					"depends/SDL3/lib/x64/",
 					"depends/ddz/",
+					"depends/assimp/lib/",
 					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 				}
 				
@@ -126,6 +129,7 @@ workspace "CruelerThanDAT"
 					path.join(fbx,		"lib/x64/release/"),
 					"depends/SDL3/lib/x64/",
 					"depends/ddz/",
+					"depends/assimp/lib/",
 					"build-curl/%{cfg.longname}/lib/%{cfg.longname}/",
 				}
 				
@@ -179,6 +183,7 @@ workspace "CruelerThanDAT"
 			"depends/glm/",
 			"depends/astc/include/",
 			"depends/ddz/",
+			"depends/assimp/include/",
 		}
 
 		filter { "toolset:clang" }
@@ -204,6 +209,7 @@ workspace "CruelerThanDAT"
 				"libfbxsdk",
 				"libcurl-d",
 				"ddz",
+				"assimp"
 			}
 		
 		filter { "configurations:Release" }
@@ -220,4 +226,5 @@ workspace "CruelerThanDAT"
 				"libfbxsdk",
 				"libcurl",
 				"ddz",
+				"assimp"
 			}
