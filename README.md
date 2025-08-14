@@ -4,7 +4,7 @@
 ## SUPPORTED TITLES
 |Title|Model Viewing Capability|General File Editing|Console Details|
 |-----|------------------------|--------------------|---------------|
-|Metal Gear Rising|Yes (WMB2/WMB3)| Most files supported|Full Support|
+|Metal Gear Rising|Yes (WMB2/WMB3)| Most files supported|No big-endian DDS (for now)|
 |Bayonetta 1|Yes (WMB0)| Most file supported|No ASTC or GX2 textures|
 |Bayonetta 2|Meshes, no textures (WMB0)|Most files supported|No ASTC or GX2 textures|
 |Bayonetta 3|Hardly (WMB3)|Few files supported|N/A|
