@@ -53,7 +53,7 @@ Basic files such as DAT, BXM, EFF, etc are openable by default on all titles, in
 - [LLVM](https://llvm.org/): For the Clang compiler specifically. The [Chocolatey package](https://community.chocolatey.org/packages/llvm) is recommmended due to ease of installation.
 
 #### Instructions
-1. Clone the repository recursively. If using git from a terminal, run `git clone --recursive https://github.com/ChloeZamorano/CruelerThanDAT`. Cloning recursively will ensure the cURL submodule won't be missing.
+1. Clone the repository recursively. If using git from a terminal, run `git clone --recursive https://github.com/Gaming-With-Portals/CruelerThanDAT`. Cloning recursively will ensure the cURL submodule won't be missing.
 2. Run the command `premake5 gmake` in the root folder of the repository. This will generate project files for GNU Make, including the cURL dependency and CruelerThanDAT itself.
 3. Compile with GNU Make:
     - To compile cURL, run `make config=debug cURL`, where `debug` can be replaced with `release`, and the `-j` option may be specified for faster build times; for example `-j4` to use 4 threads, or any desired amount.
