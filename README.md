@@ -2,14 +2,16 @@
 - Sundowner, Metal Gear Rising (2013)
 
 ## SUPPORTED TITLES
-(These titles are in order of most functional to least, however all titles have some functionality)
-- Metal Gear Rising: Revengeance
-- Bayonetta 1
-- Bayonetta 2
-- Bayonetta 3
-- Nier: Automata
+|Title|Model Viewing Capability|General File Editing|Console Details|
+|-----|------------------------|--------------------|---------------|
+|Metal Gear Rising|Yes (WMB2/WMB3)| Most files supported|No big-endian DDS (for now)|
+|Bayonetta 1|Yes (WMB0)| Most file supported|No ASTC or GX2 textures|
+|Bayonetta 2|Meshes, no textures (WMB0)|Most files supported|No ASTC or GX2 textures|
+|Bayonetta 3|Hardly (WMB3)|Few files supported|N/A|
+|Nier|Hardly (WMB3)|Few files supported|N/A|
+|Astral Chain|Hardly (WMB3)|Few files supported|N/A|
 
-All titles also can have the big-endian console variants opened.
+Basic files such as DAT, BXM, EFF, etc are openable by default on all titles, in both regular and big-endian variants.
 
 ## Features
 - Full WMB/SCR viewer with textures
@@ -51,7 +53,7 @@ All titles also can have the big-endian console variants opened.
 - [LLVM](https://llvm.org/): For the Clang compiler specifically. The [Chocolatey package](https://community.chocolatey.org/packages/llvm) is recommmended due to ease of installation.
 
 #### Instructions
-1. Clone the repository recursively. If using git from a terminal, run `git clone --recursive https://github.com/ChloeZamorano/CruelerThanDAT`. Cloning recursively will ensure the cURL submodule won't be missing.
+1. Clone the repository recursively. If using git from a terminal, run `git clone --recursive https://github.com/Gaming-With-Portals/CruelerThanDAT`. Cloning recursively will ensure the cURL submodule won't be missing.
 2. Run the command `premake5 gmake` in the root folder of the repository. This will generate project files for GNU Make, including the cURL dependency and CruelerThanDAT itself.
 3. Compile with GNU Make:
     - To compile cURL, run `make config=debug cURL`, where `debug` can be replaced with `release`, and the `-j` option may be specified for faster build times; for example `-j4` to use 4 threads, or any desired amount.
