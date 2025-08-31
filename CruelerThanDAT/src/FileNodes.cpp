@@ -181,6 +181,57 @@ float HelperFunction::HalfToFloat(uint16_t h) {
 	return result;
 }
 
+float HelperFunction::PGHalfToFloat(uint16_t value)
+{
+	double f = 0.0;
+	uint32_t ui = value;
+	uint32_t sign = ui & 0x8000;
+	ui = ui ^ sign;
+
+	uint32_t exponent = ui & 0x7E00;
+	uint32_t significand = ui ^ exponent;
+
+	int bit = 1 << 8;
+	for (int i = 1; i <= 9; i++) {
+		if (bit & significand) {
+			f += std::pow(2.0, -i);
+		}
+		bit >>= 1;
+	}
+
+	if (exponent == 0x7E00) { // special cases: NaN or Infinity
+		if (significand) {
+			return std::numeric_limits<float>::quiet_NaN();
+		}
+		else {
+			return sign ? -std::numeric_limits<float>::infinity()
+				: std::numeric_limits<float>::infinity();
+		}
+	}
+	else if (exponent != 0) {
+		exponent >>= 9;
+		int sexponent = static_cast<int>(exponent) - 47;
+		f += 1.0;
+		f *= std::pow(2.0, sexponent);
+		if (sign) {
+			f *= -1.0;
+		}
+		return static_cast<float>(f);
+	}
+	else {
+		if (significand) { // denormal
+			if (sign) {
+				f *= -1.0;
+			}
+			f *= std::pow(2.0, -46);
+			return static_cast<float>(f);
+		}
+		else {
+			return sign ? -0.0f : 0.0f;
+		}
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -329,7 +380,7 @@ void FileNode::PopupOptions(CruelerContext *ctx) {
 			}
 		}
 
-
+		
 
 		//PopupOptionsEx();
 
@@ -652,46 +703,46 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 	}
 
 	void UvdFileNode::RenderGUI(CruelerContext *ctx) {
-		if (ImGui::BeginTabBar("uvd_editor_bar")) {
-			if (ImGui::BeginTabItem("UVD Entries")) {
-				for (UvdEntry entry : uvdEntries) {
-					if (ctx->textureMap.find(entry.textureID) != ctx->textureMap.end()) {
+		ImGui::Checkbox("Maintain Aspect", &maintainAspect);
+		for (UvdEntry entry : uvdEntries) {
+			ImGui::Text("ID: %d", entry.ID);
+			ImGui::SameLine();
+			ImGui::Text("Name: %s", entry.name.c_str());
+			if (ctx->textureMap.find(entry.textureID) != ctx->textureMap.end()) {
 
-						GLint texWidth;
-						GLint texHeight;
+				GLint texWidth;
+				GLint texHeight;
 
-						glBindTexture(GL_TEXTURE_2D, ctx->textureMap[entry.textureID]);
+				glBindTexture(GL_TEXTURE_2D, ctx->textureMap[entry.textureID]);
 
-						glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
-						glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
+				glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texWidth);
+				glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texHeight);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
+				float aspect = (float)entry.width / (float)entry.height;
+				float scaledWidth = 64.0f * aspect;
 
-						ImVec2 uv0(entry.x / (float)texWidth, entry.y / (float)texHeight);
-						ImVec2 uv1((entry.x + entry.width) / (float)texWidth, (entry.y + entry.height) / (float)texHeight);
-						ImGui::Image((ImTextureID)(intptr_t)ctx->textureMap[entry.textureID], ImVec2(64, 64), uv0, uv1);
-					}
-					else {
-						ImGui::Image((ImTextureID)(intptr_t)ctx->textureMap[0], ImVec2(64, 64));
-					}
-
-
-
-					ImGui::SameLine();
-					ImGui::Text("ID: %d", entry.ID);
-
-					if (ImGui::TreeNode(entry.name.c_str())) {
-						ImGui::TreePop();
-					}
-
+				ImVec2 uv0(entry.x / (float)texWidth, entry.y / (float)texHeight);
+				ImVec2 uv1((entry.x + entry.width) / (float)texWidth, (entry.y + entry.height) / (float)texHeight);
+				if (maintainAspect) {
+					ImGui::Image((ImTextureID)(intptr_t)ctx->textureMap[entry.textureID], ImVec2(scaledWidth, 64.0f), uv0, uv1);
 				}
+				else {
+					ImGui::Image((ImTextureID)(intptr_t)ctx->textureMap[entry.textureID], ImVec2(64.0f, 64.0f), uv0, uv1);
+				}
+				
 
-
-				ImGui::EndTabItem();
+			}
+			else {
+				ImGui::Image((ImTextureID)(intptr_t)ctx->textureMap[0], ImVec2(64, 64));
 			}
 
 
-			ImGui::EndTabBar();
+
+
 		}
+
 	}
 
 	void UvdFileNode::SaveFile() {
@@ -990,12 +1041,46 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		fileIcon = ICON_CI_RECORD;
 		TextColor = { 1.0f, 0.0f, 0.376f, 1.0f };
 		nodeType = MOT;
-		fileFilter = L"XSI Motion Files(*.mot)\0*.mot;\0";
+		fileFilter = L"Motion Files(*.mot)\0*.mot;\0";
 	}
 	void MotFileNode::LoadFile() {
+		BinaryReader reader(fileData, fileIsBigEndian);
+		reader.Seek(0x8);
+		flag = reader.ReadUINT16();
+		frameCount = reader.ReadINT16();
+		recordOffset = reader.ReadUINT32();
+		recordNumber = reader.ReadUINT32();
+		unknown = reader.ReadUINT32();
 
+		reader.Seek(recordOffset);
+		for (uint32_t i = 0; i < recordNumber; i++) {
+			MotRecord rec = MotRecord();
+			rec.self_offset = reader.Tell();
+			rec.boneIndex = reader.ReadINT16();
+			rec.propertyType = reader.ReadINT8();
+			rec.interpolationType = reader.ReadINT8();
+			rec.interpolationCount = reader.ReadINT16();
+			rec.unknown = reader.ReadINT16();
+			if (rec.interpolationType == 0) {
+				rec.value = reader.ReadFloat();
+				rec.first_value = rec.value;
+			}
+			else {
+				rec.offset = reader.ReadUINT32();
+			}
+			
+			motRecords.push_back(rec);
+		}
 
+		for (MotRecord& rec : motRecords) {
+			
+			if (rec.interpolationType == 6) {
+				reader.Seek(rec.offset + rec.self_offset);
+				rec.first_value = HelperFunction::PGHalfToFloat(reader.ReadUINT16());
+			}
+		}
 
+		return;
 	}
 	void MotFileNode::SaveFile() {
 
@@ -1784,6 +1869,299 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		return;
 	}
 
+	void WmbFileNode::LoadModelWMB2(BinaryReader& reader)
+	{
+		// TODO: Finish
+		struct WMB2Header {
+			uint32_t vertexGroupPointer;
+			uint32_t batchPointer;
+			uint32_t batchCount;
+			uint32_t bonePointer;
+			uint32_t boneCount;
+			uint32_t boneTranslateTablePointer;
+			uint32_t boneTranslateTableSize;
+			uint32_t boneSetPointer;
+			uint32_t boneSetCount;
+			uint32_t materialPointer;
+			uint32_t materialCount;
+			uint32_t texturePointer;
+			uint32_t textureCount;
+			uint32_t meshPointer;
+			uint32_t meshCount;
+		};
+
+		struct WMB2Batch {
+			uint32_t facePointer;
+			uint32_t vertexStart;
+			uint32_t numVertexes;
+			uint32_t numIndexes;
+			uint32_t flags;
+		};
+
+		struct WMB2VertexGroup {
+			uint32_t dataPointer;
+			uint32_t vertexSize;
+			uint32_t unknownPointer;
+			uint32_t unknownCount;
+			uint32_t vertexCount;
+			uint32_t vertexFormat;
+		};
+
+		struct WMB2Material {
+			uint32_t dataPointer;
+			std::string shaderName;
+			uint16_t textureCount;
+			uint16_t paramCount;
+		};
+
+		reader.Seek(36);
+		WMB2Header header{};
+		header.vertexGroupPointer = reader.ReadUINT32();
+		header.batchPointer = reader.ReadUINT32();
+		header.batchCount = reader.ReadUINT32();
+		header.bonePointer = reader.ReadUINT32();
+		header.boneCount = reader.ReadUINT32();
+		header.boneTranslateTablePointer = reader.ReadUINT32();
+		header.boneTranslateTableSize = reader.ReadUINT32();
+		header.boneSetPointer = reader.ReadUINT32();
+		header.boneSetCount = reader.ReadUINT32();
+		header.materialPointer = reader.ReadUINT32();
+		header.materialCount = reader.ReadUINT32();
+		header.texturePointer = reader.ReadUINT32();
+		header.textureCount = reader.ReadUINT32();
+		header.meshPointer = reader.ReadUINT32();
+		header.meshCount = reader.ReadUINT32();
+
+		WMB2VertexGroup vertexGroup;
+		reader.Seek(header.vertexGroupPointer);
+		vertexGroup.dataPointer = reader.ReadUINT32();
+		vertexGroup.vertexSize = reader.ReadUINT32();
+		vertexGroup.unknownPointer = reader.ReadUINT32();
+		vertexGroup.unknownCount = reader.ReadUINT32();
+		vertexGroup.vertexCount = reader.ReadUINT32();
+		vertexGroup.vertexFormat = reader.ReadUINT32();
+
+
+		std::vector<WMB2Batch> batches;
+		reader.Seek(header.batchPointer);
+		for (uint32_t i = 0; i < header.batchCount; i++) {
+			WMB2Batch tmpbatch;
+			tmpbatch.facePointer = reader.ReadUINT32();
+			tmpbatch.vertexStart = reader.ReadUINT32();
+			tmpbatch.numVertexes = reader.ReadUINT32();
+			tmpbatch.numIndexes = reader.ReadUINT32();
+			tmpbatch.flags = reader.ReadUINT32();
+			batches.push_back(tmpbatch);
+		}
+
+		std::vector<CUSTOMVERTEX> vertexPool;
+
+		if (vertexGroup.vertexFormat = 311) {
+
+
+			reader.Seek(vertexGroup.dataPointer);
+			for (uint32_t i = 0; i < vertexGroup.vertexCount; i++) {
+				CUSTOMVERTEX cvtx = CUSTOMVERTEX();
+
+				if (vertexGroup.vertexFormat == 311) {
+					cvtx.x = reader.ReadFloat();
+					cvtx.y = reader.ReadFloat();
+					cvtx.z = reader.ReadFloat();
+
+
+					cvtx.u = HelperFunction::HalfToFloat(reader.ReadUINT16());
+					cvtx.v = HelperFunction::HalfToFloat(reader.ReadUINT16());
+
+					MGRVector normals = DecodeNormalWMB0(reader.ReadUINT32());
+					cvtx.nx = normals.x;
+					cvtx.ny = normals.y;
+					cvtx.nz = normals.z;
+					glm::vec4 tangents = HelperFunction::DecodeTangent(reader.ReadUINT32());
+					cvtx.tx = tangents.x;
+					cvtx.ty = tangents.y;
+					cvtx.tz = tangents.z;
+					cvtx.tw = tangents.w;
+
+					reader.ReadUINT32();
+					reader.ReadUINT32();
+
+					cvtx.color = 0xFFFFFFFF;
+				}
+				vertexPool.push_back(cvtx);
+			}
+		}
+
+
+		reader.Seek(header.texturePointer);
+		std::unordered_map<uint32_t, uint32_t> textureIDToFlag;
+		for (uint32_t i = 0; i < header.textureCount; i++) {
+			uint32_t id = reader.ReadUINT32();
+			uint32_t flag = reader.ReadUINT32();
+			textureIDToFlag[id] = flag;
+		}
+
+
+		for (uint32_t i = 0; i < header.materialCount; i++) {
+			reader.Seek(header.materialPointer + (i * 20));
+			CTDMaterial mat;
+			uint32_t dataOffset = reader.ReadUINT32();
+			mat.shader_name = reader.ReadString(0x10);
+			mat.shader_name.erase(std::remove(mat.shader_name.begin(), mat.shader_name.end(), '\0'), mat.shader_name.end()); // sanatize
+
+			reader.Seek(dataOffset);
+			uint16_t texCount = reader.ReadUINT16();
+			reader.ReadUINT32();
+			uint16_t paramCount = reader.ReadUINT16();
+
+			for (int j = 0; j < texCount; j++) {
+				uint32_t textureID = reader.ReadUINT32();
+				if (j == 0) {
+					mat.texture_data[0] = textureID;
+				}
+				else if (j == 3) {
+					mat.texture_data[2] = textureID;
+				}
+				
+			}
+
+			for (int j = 0; j < paramCount / 4; j++) {
+				mat.parameters.push_back({ reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat() });
+			}
+
+
+			materials.push_back(mat);
+
+			
+		}
+
+
+		reader.Seek(header.meshPointer);
+		for (uint32_t i = 0; i < header.meshCount; i++) {
+			CruelerMesh* ctdmesh = new CruelerMesh();
+			ctdmesh->name = reader.ReadString(32);
+			uint32_t batchPointer = reader.ReadUINT32();
+			uint16_t batchCount = reader.ReadUINT16();
+			reader.ReadBytes(50);
+			uint32_t pos = reader.Tell();
+
+			reader.Seek(batchPointer);
+			for (uint32_t x = 0; x < batchCount; x++) {
+				reader.Seek(batchPointer + (x * 8));
+				WMB2Batch& activeBatch = batches[reader.ReadUINT16()];
+				CruelerBatch* ctdbatch = new CruelerBatch();
+				ctdbatch->materialID = reader.ReadUINT16();
+				
+				ctdbatch->indexCount = activeBatch.numIndexes;
+				reader.Seek(activeBatch.facePointer);
+				std::vector<unsigned short> indices = reader.ReadUINT16Array(activeBatch.numIndexes);
+				
+				if (fileIsBigEndian) { // what the actual fuck platinum 2
+					std::vector<unsigned short> chain;
+					std::vector<unsigned short> newIndices;
+					bool reverse = false;
+					for (unsigned short& indice : indices) {
+						if (indice == 0xFFFF) {
+							chain.clear();
+							reverse = false;
+							continue;
+						}
+						chain.push_back(indice);
+						if (chain.size() > 3) {
+							chain.erase(chain.begin());
+						}
+						if (chain.size() == 3) {
+							if (reverse) {
+								std::reverse(chain.begin(), chain.end());
+							}
+							newIndices.insert(newIndices.end(), chain.begin(), chain.end());
+							if (reverse) {
+								std::reverse(chain.begin(), chain.end());
+							}
+							reverse = !reverse;
+
+						}
+					}
+
+					indices = newIndices;
+				}
+
+				ctdbatch->indexes = indices;
+				ctdbatch->vertexes = vertexPool;
+
+				glGenBuffers(1, &ctdbatch->indexBuffer);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexes.size() * sizeof(unsigned short), ctdbatch->indexes.data(), GL_STATIC_DRAW);
+
+				// Vertexes
+				std::vector<CUSTOMVERTEX> batchSubPool(
+					vertexPool.begin() + activeBatch.vertexStart,
+					vertexPool.begin() + activeBatch.vertexStart + activeBatch.numVertexes);
+
+				if (ctdbatch->vertexBuffer == 0)
+					glGenBuffers(1, &ctdbatch->vertexBuffer);
+
+				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+				glBufferData(GL_ARRAY_BUFFER, batchSubPool.size() * sizeof(CUSTOMVERTEX), batchSubPool.data(), GL_STATIC_DRAW);
+
+				ctdbatch->vertexes = batchSubPool;
+
+
+
+				glGenVertexArrays(1, &ctdbatch->vao);
+
+				glBindVertexArray(ctdbatch->vao);
+
+				// Rebind VBO/IBO inside VAO scope
+				glBindBuffer(GL_ARRAY_BUFFER, ctdbatch->vertexBuffer);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctdbatch->indexBuffer);
+
+				size_t curOffset = 0;
+				// Position
+				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(0);
+				curOffset += 3 * sizeof(float);
+
+				// Color
+				glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(1);
+				curOffset += 4 * sizeof(byte);
+
+				// UV map
+				glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(2);
+				curOffset += 2 * sizeof(float);
+
+				// Normals
+				glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(3);
+				curOffset += 3 * sizeof(float);
+
+				// Tangents
+				glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(4);
+				curOffset += 4 * sizeof(float);
+
+				// Lightmap UV
+				glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(CUSTOMVERTEX), (void*)curOffset);
+				glEnableVertexAttribArray(2);
+				curOffset += 2 * sizeof(float);
+
+				glBindVertexArray(0);
+
+				ctdmesh->batches.push_back(ctdbatch);
+			}
+
+			reader.Seek(pos);
+			displayMeshes.push_back(ctdmesh);
+
+		}
+
+
+
+
+		return;
+	}
+
 	void WmbFileNode::LoadModelWMB3(BinaryReader& reader)
 	{
 		struct WMB3Header {
@@ -2201,9 +2579,20 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 	void WmbFileNode::LoadFile() {
 		BinaryReader reader(fileData, true);
 		reader.SetEndianess(fileIsBigEndian);
+		uint32_t f_version = reader.ReadUINT32();
+
+		reader.Seek(0);
+		if (f_version == 4345175) {
+			wmbVersion = WMB0_BAY1;
+		}
+
 
 		if (wmbVersion == WMB3_BAY3) {
 			LoadModelWMB3(reader);
+			return;
+		}
+		if (wmbVersion == WMB2_MGRR) {
+			LoadModelWMB2(reader);
 			return;
 		}
 		else if (wmbVersion == WMB0_BAY1) {
@@ -2693,92 +3082,69 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 	void WmbFileNode::WMBToASSIMP()
 	{
-		if (wmbVersion != WMB4_MGRR) {
+		if (wmbVersion != WMB4_MGRR && wmbVersion != WMB2_MGRR) {
 			CTDLog::Log::getInstance().LogError("WMB format not supported for export.");
 			return;
 		}
-		aiScene* scene = new aiScene();
+		FbxManager* manager = FbxManager::Create();
+		FbxScene* scene = FbxScene::Create(manager, "WMB");
+		scene->GetGlobalSettings().SetSystemUnit(FbxSystemUnit::m);
+		FbxIOSettings* ios = FbxIOSettings::Create(manager, IOSROOT);
+		manager->SetIOSettings(ios);
+		ios->SetBoolProp(EXP_FBX_EMBEDDED, true);
 
-		scene->mRootNode = new aiNode();
-		scene->mRootNode->mName = aiString(fileName);
 
-		scene->mMaterials = new aiMaterial * [1];
-		scene->mMaterials[0] = new aiMaterial();
-		scene->mNumMaterials = 1;
 
-		size_t totalMeshes = 0;
 		for (CruelerMesh* cmesh : displayMeshes) {
-			totalMeshes += cmesh->batches.size();
-		}
+			for (CruelerBatch* batch : cmesh->batches) {
+				FbxMesh* mesh = FbxMesh::Create(scene, (cmesh->name + "_mesh").c_str());
 
-		scene->mNumMeshes = totalMeshes;
-		scene->mMeshes = new aiMesh * [totalMeshes];
+				FbxGeometryElementUV* lUVDiffuseElement = mesh->CreateElementUV("UVMap1");
 
-		// Create the armature node
-		aiNode* armatureNode = new aiNode("Armature");
+				FBX_ASSERT(lUVDiffuseElement != NULL);
+				lUVDiffuseElement->SetMappingMode(FbxGeometryElement::eByControlPoint);
+				lUVDiffuseElement->SetReferenceMode(FbxGeometryElement::eDirect);
 
-		// The root node will have two types of children: the armature node and the mesh nodes.
-		scene->mRootNode->mNumChildren = totalMeshes + 1; // 1 for the armature, and totalMeshes for the meshes
-		scene->mRootNode->mChildren = new aiNode * [totalMeshes + 1];
 
-		// Assign the armature node as the first child of the root node
-		scene->mRootNode->mChildren[0] = armatureNode;
-		armatureNode->mParent = scene->mRootNode;
-
-		// The armature node will contain all the bone nodes
-		armatureNode->mNumChildren = totalMeshes;
-		armatureNode->mChildren = new aiNode * [totalMeshes];
-
-		size_t mesh_index = 0;
-		for (CruelerMesh* cmesh : displayMeshes) {
-			size_t batch_index = 0;
-			for (CruelerBatch* cbatch : cmesh->batches) {
-				aiMesh* mesh = new aiMesh();
-				std::vector<unsigned int> indices32(cbatch->indexes.begin(), cbatch->indexes.end());
-
-				MeshDataFromCTDVertex(mesh, cbatch->vertexes, indices32);
-				mesh->mMaterialIndex = 0;
-				scene->mMeshes[mesh_index] = mesh;
-
-				// Create a node for the bone and make it a child of the armature node
-				std::string boneName = "Bone_" + std::to_string(mesh_index); // Use mesh_index for bone_index
-				aiNode* boneNode = new aiNode(boneName);
-				boneNode->mParent = armatureNode;
-				armatureNode->mChildren[mesh_index] = boneNode; // mesh_index for bone node
-
-				// Create the aiBone object attached to the mesh
-				mesh->mNumBones = 1;
-				mesh->mBones = new aiBone * [1];
-				aiBone* bone = mesh->mBones[0] = new aiBone();
-				bone->mName = aiString(boneName); // CRITICAL: Bone name must match node name
-				bone->mOffsetMatrix = aiMatrix4x4();
-
-				bone->mNumWeights = mesh->mNumVertices;
-				bone->mWeights = new aiVertexWeight[mesh->mNumVertices];
-				for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
-					bone->mWeights[v].mVertexId = v;
-					bone->mWeights[v].mWeight = 1.0f;
+				mesh->InitControlPoints(static_cast<int>(batch->vertexes.size()));
+				for (int i = 0; i < batch->vertexes.size(); i++) {
+					mesh->SetControlPointAt(FbxVector4(batch->vertexes[i].x, batch->vertexes[i].y, batch->vertexes[i].z), i);
+					lUVDiffuseElement->GetDirectArray().Add(FbxVector2(batch->vertexes[i].u, 1.0 - batch->vertexes[i].v));
 				}
 
-				// Create a node for the mesh and make it a child of the root node
-				aiNode* meshNode = new aiNode(cmesh->name + "_" + std::to_string(batch_index));
-				meshNode->mParent = scene->mRootNode;
-				meshNode->mMeshes = new unsigned int[1] { static_cast<unsigned int>(mesh_index) };
-				meshNode->mNumMeshes = 1;
-				scene->mRootNode->mChildren[mesh_index + 1] = meshNode; // Offset by 1 for the armature node
+				lUVDiffuseElement->GetIndexArray().SetCount(static_cast<int>(batch->indexes.size()));
 
-				batch_index++;
-				mesh_index++;
+				for (int i = 0; i < batch->indexes.size(); i += 3) {
+					mesh->BeginPolygon();
+					int idx0 = batch->indexes[i];
+					int idx1 = batch->indexes[i + 1];
+					int idx2 = batch->indexes[i + 2];
+
+					mesh->AddPolygon(idx0);
+					mesh->AddPolygon(idx1);
+					mesh->AddPolygon(idx2);
+
+					mesh->EndPolygon();
+
+				}
+
+
+
+
+				FbxNode* meshNode = FbxNode::Create(scene, cmesh->name.c_str());
+				meshNode->SetNodeAttribute(mesh);
+				scene->GetRootNode()->AddChild(meshNode);
+
 			}
 		}
 
-		Assimp::Exporter exporter;
-		if (exporter.Export(scene, "glb", "model.glb") == aiReturn_SUCCESS) {
-			
-		}
-		else {
-			CTDLog::Log::getInstance().LogError(exporter.GetErrorString());
-		}
+
+		FbxExporter* exporter = FbxExporter::Create(manager, "");
+		exporter->Initialize("output.fbx", -1, manager->GetIOSettings());
+		exporter->Export(scene);
+		exporter->Destroy();
+
+
 	}
 
 
@@ -2884,7 +3250,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 								glDisable(GL_BLEND);
 
 
-								if (materials[batch->materialID].shader_name == "ois02_sbxeX" || materials[batch->materialID].shader_name == "ois02_xbceX" || materials[batch->materialID].shader_name == "ois02_sbceX" || materials[batch->materialID].shader_name == "siv23_sbxxx" || materials[batch->materialID].shader_name == "sis23_xbxex" || materials[batch->materialID].shader_name == "ois01_xbxeX") {
+								if (materials[batch->materialID].shader_name == "ois02_sbxeX" || materials[batch->materialID].shader_name == "max22_sbcsx" || materials[batch->materialID].shader_name == "max22_Xbcdx" || materials[batch->materialID].shader_name == "ois02_xbceX" || materials[batch->materialID].shader_name == "ois02_sbceX" || materials[batch->materialID].shader_name == "siv23_sbxxx" || materials[batch->materialID].shader_name == "sis23_xbxex" || materials[batch->materialID].shader_name == "ois01_xbxeX") {
 									glUseProgram(ShaderManager::Instance().decalShader);
 									targetShader = ShaderManager::Instance().decalShader;
 									glActiveTexture(GL_TEXTURE0);
@@ -3430,6 +3796,17 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		}
 	}
 
+	void updateBoneTransforms(CruelerBone& bone, const std::vector<CruelerBone>& bones) {
+		glm::mat4 parentCombined = glm::mat4(1.0f);
+		if (bone.parentIndex >= 0) {
+			parentCombined = bones[bone.parentIndex].combinedTransform;
+		}
+
+		bone.localTransform = glm::translate(glm::mat4(1.0f), bone.localPosition);
+		bone.combinedTransform = parentCombined * bone.localTransform;
+		bone.worldPosition = glm::vec3(bone.combinedTransform[3]);
+	}
+
 	void WmbFileNode::RenderBoneGUI() {
 		if (ImGui::BeginTabBar("bone_sub")) {
 			if (ImGui::BeginTabItem("Armature")) {
@@ -3447,6 +3824,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 				ImGui::PopStyleColor();
 				ImGui::EndTabItem();
 			}
+			/*
 			if (parent) {
 				for (FileNode* fNode : parent->children) {
 					if (fNode->nodeType == MOT) {
@@ -3454,10 +3832,45 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 							ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 0.0f));
 							ImGui::BeginChild("AnimSidebar", ImVec2(325, 0));
 
+							uint32_t i = 0;
 							for (FileNode* fNode : parent->children) {
 								if (fNode->nodeType == MOT) {
+									i += 1;
+									ImGui::PushID(i);
 									ImGui::Text(fNode->fileName.c_str());
+									ImGui::SameLine();
+									if (ImGui::Button("Play")) {
+										fNode->LoadFile();
+										MotFileNode* mot = (MotFileNode*)fNode;
+										for (MotRecord& rec : mot->motRecords) {
+											for (CruelerBone& bone : bones) {
+												if (bone.boneID == rec.boneIndex) {
+													if (rec.interpolationType == 0) {
+														switch (rec.propertyType) {
+														case 0: bone.localPosition.x = rec.first_value; break;
+														case 1: bone.localPosition.y = rec.first_value; break;
+														case 2: bone.localPosition.z = rec.first_value; break;
+														}
+														updateBoneTransforms(bone, bones);  // keep transforms consistent!
+													}
+													else if (rec.interpolationType == 6) {
+														switch (rec.propertyType) {
+														case 0: bone.localPosition.x = rec.first_value; break;
+														case 1: bone.localPosition.y = rec.first_value; break;
+														case 2: bone.localPosition.z = rec.first_value; break;
+														}
+														updateBoneTransforms(bone, bones);
+													}
+												}
+											}
+										}
+									
+
+									}
+									ImGui::PopID();
+
 								}
+
 							}
 
 
@@ -3469,7 +3882,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 						break;
 					}
 				}
-			}
+			}*/
 
 
 
@@ -3518,7 +3931,7 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		ImGui::EndChild();
 		ImGui::PopStyleColor(3);
 	}
-
+	
 	void SCRMesh::Read(BinaryReader& br) {
 		offset = br.ReadUINT32();
 		name = br.ReadString(64);
@@ -3581,6 +3994,8 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 			node->scaleOffset = meshes[i].scale;
 			node->meshRotation = meshes[i].rotation;
 			node->fileIsBigEndian = fileIsBigEndian;
+			
+
 			node->SetFileData(reader.ReadBytes(size));
 			node->LoadFile();
 			children.push_back(node);
@@ -3612,7 +4027,6 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		reader.Seek(0x4);
 		int headerLength = reader.ReadUINT32();
 		int wwiseVersion = reader.ReadUINT32();
-
 
 		if (wwiseVersion != 72) {
 			if (wwiseVersion == 1207959552) {

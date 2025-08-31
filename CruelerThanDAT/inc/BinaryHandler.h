@@ -174,6 +174,9 @@ public:
             throw std::runtime_error("Read beyond the buffer size.");
         }
         std::vector<char> buffer(size);
+        if (size == 0) {
+            return buffer;
+        }
         std::memcpy(buffer.data(), &data[offset], size);
         offset += size;
         return buffer;

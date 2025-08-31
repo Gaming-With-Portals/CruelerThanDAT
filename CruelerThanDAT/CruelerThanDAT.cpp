@@ -98,7 +98,7 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
-		else if (fileType == 876760407 || fileType == 859983191 || fileType == 4345175) {
+		else if (fileType == 876760407 || fileType == 859983191 || fileType == 4345175 || fileType == 843205975) {
 			unsigned int wmbMajorVersion = fileType;
 			unsigned int wmbMinorVersion = *reinterpret_cast<const uint32_t*>(&data[4]);
 
@@ -119,6 +119,10 @@ namespace HelperFunction {
 				WmbFileNode* wmb = (WmbFileNode*)outputFile;
 				wmb->wmbVersion = WMB0_BAY1;
 			}
+			else if (wmbMajorVersion == 843205975) {
+				WmbFileNode* wmb = (WmbFileNode*)outputFile;
+				wmb->wmbVersion = WMB2_MGRR;
+			}
 
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
@@ -137,7 +141,7 @@ namespace HelperFunction {
 				outputFile->fileIsBigEndian = bigEndian;
 			}
 			outputFile->SetFileData(data);
-			outputFile->LoadFile();
+			// wait to load file until required
 		}
 		else if (fileType == 5000536 || fileType == 5068866) {
 			outputFile = new BxmFileNode(fileName);
@@ -482,6 +486,91 @@ void SelfUpdate(CruelerContext *ctx) {
 
 }
 
+std::string GetFileSTDString(LPCWSTR window_name, LPCWSTR file_filter = L"*.*") {
+
+	OPENFILENAME ofn;
+	wchar_t szFile[260] = { 0 };
+	LPWSTR pFile = szFile;
+
+	ZeroMemory(&ofn, sizeof(OPENFILENAME));
+
+	ofn.lpstrFile = pFile;
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = NULL;
+	ofn.nMaxFile = 260;
+	ofn.lpstrFilter = file_filter;
+	ofn.lpstrTitle = window_name;
+
+	ofn.nFilterIndex = 1;
+	ofn.Flags = OFN_PATHMUSTEXIST;
+
+	if (GetOpenFileName(&ofn) == TRUE) {
+		std::wstring ws(ofn.lpstrFile);;
+		std::string path(ws.begin(), ws.end());
+		return path;
+
+	}
+	else {
+		return "";
+	}
+}
+
+
+namespace Tools {
+	void FixDATFileIndices() {
+		std::string fix_path = GetFileSTDString(L"File you want to fix", L"*.*");
+		if (fix_path == "") {
+			CTDLog::Log::getInstance().LogError("No file selected!");
+			return;
+		}
+		std::string donor_path = GetFileSTDString(L"Donor File (unmoddified from the game)", L"*.*");
+		if (donor_path == "") {
+			CTDLog::Log::getInstance().LogError("No file selected!");
+			return;
+		}
+		DatFileNode* donor = (DatFileNode*)FileNodeFromFilepath(donor_path);
+		DatFileNode* to_fix = (DatFileNode*)FileNodeFromFilepath(fix_path);
+
+		std::unordered_map<std::string, uint32_t> file_map;
+
+
+		uint32_t i = 0;
+		for (FileNode* node : donor->children) {
+			file_map[node->fileName] = i;
+
+			i += 1;
+		}
+
+		std::sort(to_fix->children.begin(), to_fix->children.end(),
+			[&](FileNode* a, FileNode* b) {
+				auto itA = file_map.find(a->fileName);
+				auto itB = file_map.find(b->fileName);
+				if (itA == file_map.end()) return false;
+				if (itB == file_map.end()) return true;
+
+				return itA->second < itB->second;
+			});
+
+
+		to_fix->SaveFile();
+		
+		std::ofstream outputFile(fix_path, std::ios::binary); 
+		if (outputFile.is_open()) {
+			to_fix->SaveFile();
+			outputFile.write(to_fix->fileData.data(), to_fix->fileData.size());
+			CTDLog::Log::getInstance().LogNote("File successfully fixed!");
+		}
+		else {
+			CTDLog::Log::getInstance().LogError("Unable to open output file... make sure no programs are using it.");
+		}
+
+		
+
+
+	}
+}
+
+
 void RenderFrame(CruelerContext *ctx) {
 	static float fov = 50.0f;
 	static float index = 180.0f;
@@ -502,7 +591,7 @@ void RenderFrame(CruelerContext *ctx) {
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(static_cast<float>(ctx->winSize.x), 26));
 
-	ImGui::Begin("TabCtrl", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
+	ImGui::Begin("TabCtrl", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_MenuBar);
 
 	if (SHOULD_UPDATE) {
 
@@ -516,38 +605,65 @@ void RenderFrame(CruelerContext *ctx) {
 		ImGui::SameLine();
 	}
 
-	if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-		ReleaseCapture();
-		//PostMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
-	}
+	if (ImGui::BeginMenuBar()) {
+		if (ImGui::BeginMenu("File")) {
+			if (ImGui::MenuItem("Create New")) {
+				openFiles.push_back(new DatFileNode("new.dat"));
+			
+			}
+			if (ImGui::MenuItem("Open", "Ctrl+O")) {
+				OPENFILENAME ofn;
+				wchar_t szFile[260] = { 0 };
+				LPWSTR pFile = szFile;
 
-	//ImGui::Text("Textures Loaded: %zu/%d", ctx->textureMap.size(), TEXTURE_CAP);
-	
-	ImGui::Image((ImTextureID)1, ImVec2(16, 16)); // TODO: Figure out what's the correct thing for this
-	ImGui::SameLine();
-	ImGui::SetCursorPosY(9);
-	ImGui::Text("CruelerThanDAT");
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(240);
-	ImGui::SetCursorPosY(-1);
+				ZeroMemory(&ofn, sizeof(OPENFILENAME));
+
+				ofn.lpstrFile = pFile;
+				ofn.lStructSize = sizeof(OPENFILENAME);
+				ofn.hwndOwner = NULL;
+				ofn.nMaxFile = 260;
+				ofn.lpstrFilter = L"*.*";
+
+				ofn.nFilterIndex = 1;
+				ofn.Flags = OFN_PATHMUSTEXIST;
+
+				if (GetOpenFileName(&ofn) == TRUE) {
+					std::wstring ws(ofn.lpstrFile);;
+					std::string path(ws.begin(), ws.end());
+					openFiles.push_back(FileNodeFromFilepath(path));
+
+				}
+
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu("Tools")) {
+			if (ImGui::BeginMenu("DAT")) {
+				if (ImGui::MenuItem("Fix DAT File Ordering")) {
+					Tools::FixDATFileIndices();
+				}
+				ImGui::EndMenu();
+			}
+			if (ImGui::BeginMenu("WMB")) {
+
+				ImGui::EndMenu();
+			}
+			ImGui::EndMenu();
+		}
+
+		ImGui::EndMenuBar();
+	};
+
+	ImGui::SetNextItemWidth(240);;
+	ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetStyle().ItemSpacing.y);
 	ImGui::SetCursorPosX(0);
-
 	ImGui::ProgressBar(ctx->progress, ImVec2(static_cast<float>(ctx->winSize.x), 4.0f), "");
 
 	float spacing = 4.0f;
 	float btnW = 36.0f;
 	float totalBtnWidth = (btnW * 2.0f) + spacing;
 
-	ImGui::SameLine(ImGui::GetContentRegionAvail().x - totalBtnWidth);
-
-	if (ImGui::Button("_", ImVec2(btnW, 0))) {
-		ShowWindow(GetActiveWindow(), SW_MINIMIZE); 
-	}
-	ImGui::SameLine();
-
-	if (ImGui::Button("X", ImVec2(btnW, 0))) {
-		exit(0);
-	}
 
 	ImGui::End();
 	
@@ -724,6 +840,10 @@ void RenderFrame(CruelerContext *ctx) {
 					wmbVersionString = "WMB4";
 					wmbGameTitle = "Metal Gear Rising: Revengeance";
 				}
+				else if (wmbNode->wmbVersion == WMB2_MGRR) {
+					wmbVersionString = "WMB2";
+					wmbGameTitle = "Metal Gear Rising: Revengeance";
+				}
 				else if (wmbNode->wmbVersion == WMB3_BAY3) {
 					wmbVersionString = "WMB3";
 					wmbGameTitle = "Bayonetta 3";
@@ -803,7 +923,7 @@ void RenderFrame(CruelerContext *ctx) {
 
 
 
-						ImGui::Text((("Material " + std::to_string(i))).c_str());
+						ImGui::Text("Material %d | Shader %s", i, mat.shader_name.c_str());
 						if (ImGui::IsItemHovered()) {
 							mat.highlight = true;
 						}

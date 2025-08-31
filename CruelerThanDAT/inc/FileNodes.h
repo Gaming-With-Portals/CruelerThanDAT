@@ -25,6 +25,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <Camera.h>
+#include <fbxsdk.h>
 /**/
 
 class CPKManager;
@@ -110,6 +111,7 @@ namespace HelperFunction {
 
 
 	float HalfToFloat(uint16_t h);
+	float PGHalfToFloat(uint16_t h);
 	MGRVector DecodeNormal(uint32_t packed);
 	glm::vec4 DecodeTangent(uint32_t packedTangent);
 
@@ -251,6 +253,8 @@ public:
 };
 
 class UvdFileNode : public FileNode {
+private:
+	bool maintainAspect = true;
 public:
 	std::vector<UvdTexture> uvdTextures;
 	std::vector<UvdEntry> uvdEntries;
@@ -539,11 +543,29 @@ public:
 
 
 
-
+struct MotRecord {
+	int16_t boneIndex;
+	uint8_t propertyType;
+	uint8_t interpolationType;
+	int16_t interpolationCount;
+	int16_t unknown;
+	float first_value;
+	uint32_t self_offset; // incredibly stupid
+	union {
+		uint32_t offset;
+		float value;
+	};
+};
 
 
 class MotFileNode : public FileNode {
 public:
+	uint16_t flag;
+	int16_t frameCount;
+	uint32_t recordOffset;
+	uint32_t recordNumber;
+	uint32_t unknown;
+	std::vector<MotRecord> motRecords;
 
 	MotFileNode(std::string fName);
 	void LoadFile() override;
@@ -614,6 +636,7 @@ struct CruelerBone {
 	glm::mat4 localTransform;
 	glm::mat4 combinedTransform;
 	glm::mat4 offsetMatrix;
+
 };
 
 class CruelerBatch {
@@ -650,6 +673,7 @@ public:
 
 enum WmbVersionFormat {
 	WMB4_MGRR,
+	WMB2_MGRR,
 	WMB3_BAY3,
 	WMB0_BAY1,
 	WMB0_BAY2
@@ -688,6 +712,7 @@ public:
 class WmbFileNode : public FileNode {
 private:
 	void LoadModelWMB0(BinaryReader& br);
+	void LoadModelWMB2(BinaryReader& br);
 	void LoadModelWMB3(BinaryReader& br);
 public:
 	WmbVersionFormat wmbVersion = WMB4_MGRR;
