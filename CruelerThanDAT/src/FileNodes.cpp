@@ -4369,17 +4369,21 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		writer->WriteUINT32(sizesOffset);
 		writer->WriteUINT32(hashMapOffset);
 		writer->WriteUINT32(0);
-
+		
+		writer->Seek(positionsOffset);
 		for (FileNode* child : children) {
 			(void)child; // TODO: If child isn't gonna be used in a future patch, remove it entirely instead of discarding.
 			writer->WriteUINT32(0);
 		}
 
+
+		writer->Seek(extensionsOffset);
 		for (FileNode* child : children) {
 			writer->WriteString(child->fileExtension);
 			writer->WriteByteZero();
 		}
 
+		writer->Seek(namesOffset);
 		writer->WriteUINT32(longestName);
 		for (FileNode* child : children) {
 			writer->WriteString(child->fileName);
@@ -4390,10 +4394,12 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		// Pad
 		writer->WriteINT16(0);
 
-
+		writer->Seek(sizesOffset);
 		for (FileNode* child : children) {
 			writer->WriteUINT32(static_cast<uint32_t>(child->fileData.size()));
 		}
+
+		writer->Seek(hashMapOffset);
 
 		// Prepare for hash writing
 		writer->WriteUINT32(hashData.Shift);
