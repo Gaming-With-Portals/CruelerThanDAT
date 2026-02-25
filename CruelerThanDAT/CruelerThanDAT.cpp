@@ -48,7 +48,6 @@ namespace HelperFunction {
 		}
 
 
-
 		// TODO: DAT files smaller than 4 bytes (empty) aren't recognized as DAT files
 		if (fileExtension == ".uid") {
 			outputFile = new UidFileNode(fileName);
@@ -254,6 +253,7 @@ void CreateFramebuffer(CruelerContext *ctx, int res_x, int res_y) {
 }
 
 FileNode* FileNodeFromFilepath(std::string filePath) {
+
 	auto start = std::chrono::high_resolution_clock::now();
 	std::vector<char> fileData;
 	if (!ReadFileIntoVector(filePath, fileData)) {
@@ -266,7 +266,7 @@ FileNode* FileNodeFromFilepath(std::string filePath) {
 	// TODO: Do we need this? auto millisecondsnoio = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start_noio);
 	CTDLog::Log::getInstance().LogNote("Loaded " + filePath + " in " + std::to_string(milliseconds.count()) + "ms");
 
-
+	
 
 	return node;
 }
@@ -639,6 +639,10 @@ void RenderFrame(CruelerContext *ctx) {
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu("Tools")) {
+			if (ImGui::MenuItem("Get All Textures")) {
+				PopulateTextures(ctx);
+			}
+
 			if (ImGui::BeginMenu("DAT")) {
 				if (ImGui::MenuItem("Fix DAT File Ordering")) {
 					Tools::FixDATFileIndices();
@@ -649,6 +653,19 @@ void RenderFrame(CruelerContext *ctx) {
 
 				ImGui::EndMenu();
 			}
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu("Help")) {
+			if (ImGui::MenuItem("About")) {
+				SDL_ShowSimpleMessageBox(
+					SDL_MESSAGEBOX_INFORMATION,
+					"About CruelerThanDAT",
+					"The Ultimate PlatinumEngine Modding Toolkit. Made in C++ with OpenGL",
+					ctx->window
+				);
+
+			}
+
 			ImGui::EndMenu();
 		}
 
@@ -766,7 +783,9 @@ void RenderFrame(CruelerContext *ctx) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
 			ctx->viewportShow = true;
 			BxmFileNode* bxmNode = ((BxmFileNode*)FileNode::selectedNode);
+			SDL_StartTextInput(ctx->window);
 			bxmNode->RenderGUI(ctx);
+
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WTB) {
 			ctx->viewportShow = true;
@@ -818,6 +837,10 @@ void RenderFrame(CruelerContext *ctx) {
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::BNK) {
 			BnkFileNode* bnkNode = ((BnkFileNode*)FileNode::selectedNode);
 			bnkNode->RenderGUI(ctx);
+		}
+		else if (FileNode::selectedNode->nodeType == FileNodeTypes::TRG) {
+			TrgFileNode* trgNode = ((TrgFileNode*)FileNode::selectedNode);
+			trgNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::B1PHYS) {
 			BayoClpClhClwFileNode* physNode = ((BayoClpClhClwFileNode*)FileNode::selectedNode);
