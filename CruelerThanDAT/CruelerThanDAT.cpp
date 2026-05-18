@@ -25,11 +25,13 @@
 #include "CPKManager.h"
 #include <TextureHelper.h>
 #include <LanguageManager.h>
+#include <CTDDocument.h>
 
 const glm::uvec2 SCREEN_RESOLUTION = { 1280, 720 };
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 std::unordered_map<int, std::string> WTA_FLAG_MAP = { {0x20000020, "Regular"}, { 0x30000020, "Transparent (Cutout)" }, { 0xa0000020, "Cubemap" }, {0x22, "Transparent"} };
 std::vector<FileNode*> openFiles;
+std::vector<CTDDocument*> openDocuments;
 
 namespace HelperFunction {
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess, bool bigEndian) {
@@ -46,7 +48,6 @@ namespace HelperFunction {
 		if (data.size() >= 4) {
 			fileType = *reinterpret_cast<const uint32_t*>(&data[0]);
 		}
-
 
 
 		// TODO: DAT files smaller than 4 bytes (empty) aren't recognized as DAT files
@@ -66,7 +67,7 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
-		else if (fileType == 5521732) {
+		else if (fileType == 5521732 || (data.size() < 4 && (fileExtension==".dat" || fileExtension == ".dtt" || fileExtension == ".evn" || fileExtension == ".eft" || fileExtension == ".eff"))) {
 			outputFile = new DatFileNode(fileName);
 			if (forceEndianess) {
 				outputFile->fileIsBigEndian = bigEndian;
@@ -150,11 +151,15 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
-		else if (fileType == 3299660) {
+		else if (fileType == 3299660 || fileType == 1280913920) {
 			outputFile = new LY2FileNode(fileName);
+			
+
 			if (forceEndianess) {
 				outputFile->fileIsBigEndian = bigEndian;
 			}
+			if (fileType == 1280913920) { outputFile->fileIsBigEndian = true; };
+
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
@@ -254,6 +259,7 @@ void CreateFramebuffer(CruelerContext *ctx, int res_x, int res_y) {
 }
 
 FileNode* FileNodeFromFilepath(std::string filePath) {
+
 	auto start = std::chrono::high_resolution_clock::now();
 	std::vector<char> fileData;
 	if (!ReadFileIntoVector(filePath, fileData)) {
@@ -266,7 +272,7 @@ FileNode* FileNodeFromFilepath(std::string filePath) {
 	// TODO: Do we need this? auto millisecondsnoio = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start_noio);
 	CTDLog::Log::getInstance().LogNote("Loaded " + filePath + " in " + std::to_string(milliseconds.count()) + "ms");
 
-
+	
 
 	return node;
 }
@@ -639,6 +645,10 @@ void RenderFrame(CruelerContext *ctx) {
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu("Tools")) {
+			if (ImGui::MenuItem("Get All Textures")) {
+				PopulateTextures(ctx);
+			}
+
 			if (ImGui::BeginMenu("DAT")) {
 				if (ImGui::MenuItem("Fix DAT File Ordering")) {
 					Tools::FixDATFileIndices();
@@ -649,6 +659,19 @@ void RenderFrame(CruelerContext *ctx) {
 
 				ImGui::EndMenu();
 			}
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu("Help")) {
+			if (ImGui::MenuItem("About")) {
+				SDL_ShowSimpleMessageBox(
+					SDL_MESSAGEBOX_INFORMATION,
+					"About CruelerThanDAT",
+					"The Ultimate PlatinumEngine Modding Toolkit. Made in C++ with OpenGL",
+					ctx->window
+				);
+
+			}
+
 			ImGui::EndMenu();
 		}
 
@@ -766,7 +789,9 @@ void RenderFrame(CruelerContext *ctx) {
 		if (FileNode::selectedNode->nodeType == FileNodeTypes::BXM) {
 			ctx->viewportShow = true;
 			BxmFileNode* bxmNode = ((BxmFileNode*)FileNode::selectedNode);
+			SDL_StartTextInput(ctx->window);
 			bxmNode->RenderGUI(ctx);
+
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::WTB) {
 			ctx->viewportShow = true;
@@ -818,6 +843,10 @@ void RenderFrame(CruelerContext *ctx) {
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::BNK) {
 			BnkFileNode* bnkNode = ((BnkFileNode*)FileNode::selectedNode);
 			bnkNode->RenderGUI(ctx);
+		}
+		else if (FileNode::selectedNode->nodeType == FileNodeTypes::TRG) {
+			TrgFileNode* trgNode = ((TrgFileNode*)FileNode::selectedNode);
+			trgNode->RenderGUI(ctx);
 		}
 		else if (FileNode::selectedNode->nodeType == FileNodeTypes::B1PHYS) {
 			BayoClpClhClwFileNode* physNode = ((BayoClpClhClwFileNode*)FileNode::selectedNode);

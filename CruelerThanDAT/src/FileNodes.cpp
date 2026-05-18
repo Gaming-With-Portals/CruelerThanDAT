@@ -271,6 +271,51 @@ void FileNode::PopupOptionsEx() {
 
 }
 
+void FileNode::AppendFile()
+{
+	OPENFILENAME ofn;
+	wchar_t szFile[260] = { 0 };
+	LPWSTR pFile = szFile;
+
+	mbstowcs_s(0, pFile, fileName.length() + 1, fileName.c_str(), _TRUNCATE);
+
+	ZeroMemory(&ofn, sizeof(OPENFILENAME));
+
+	ofn.lpstrFile = pFile;
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = NULL;
+	ofn.nMaxFile = 260;
+	ofn.lpstrFilter = L"All Files(*.*)\0*.*;\0";
+
+	ofn.nFilterIndex = 1;
+	ofn.Flags = OFN_PATHMUSTEXIST;
+
+	if (GetOpenFileName(&ofn) == TRUE) {
+		std::ifstream file(ofn.lpstrFile, std::ios::binary | std::ios::ate);
+		if (file.is_open()) {
+			std::vector<char> new_data;
+			
+			new_data.clear();
+			std::streamsize size = file.tellg();
+			new_data.resize(size);
+			file.seekg(0, std::ios::beg);
+			file.read(new_data.data(), size);
+			file.close();
+			FileNode* node = HelperFunction::LoadNode(WCharToString(PathFindFileNameW(ofn.lpstrFile)), new_data, false, fileIsBigEndian);
+			node->parent = this;
+			children.push_back(node);
+			
+
+		}
+		else {
+			std::cout << "Error" << std::endl;
+		}
+
+	}
+
+	ImGui::CloseCurrentPopup();
+}
+
 void FileNode::ExportFile() {
 	OPENFILENAME ofn;
 	wchar_t szFile[260] = { 0 };
@@ -360,7 +405,11 @@ void FileNode::PopupOptions(CruelerContext *ctx) {
 			}
 		}
 
+
+
 		else {
+
+			
 			if (ImGui::Button("Replace", ImVec2(150, 20))) {
 				ReplaceFile();
 				isEdited = true;
@@ -380,8 +429,13 @@ void FileNode::PopupOptions(CruelerContext *ctx) {
 			}
 		}
 
-		
+		if (canHaveChildren) {
+			if (ImGui::Button("Append", ImVec2(150, 20))) {
 
+				AppendFile();
+
+			}
+		}
 		//PopupOptionsEx();
 
 		ImGui::EndPopup();
@@ -1416,6 +1470,12 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		BinaryReader reader(fileData, false);
 		reader.SetEndianess(fileIsBigEndian);
 
+		if (reader.GetSize() < 0x20) {
+			CTDLog::Log::getInstance().LogError("WTA file " + fileName + " is too small to load! (This can probably be ignored)");
+			return;
+		}
+
+
 		reader.Seek(0x4);
 		if (reader.ReadUINT32() == 1) {
 			textureCount = reader.ReadUINT32();
@@ -1701,6 +1761,37 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 			}
 		};
+
+
+		bones.resize(numBones);
+		reader.Seek(offsetBoneHierarchy);
+		for (uint32_t i = 0; i < numBones; i++) {
+			bones[i].parentIndex = reader.ReadINT16();
+		}
+
+		reader.Seek(offsetBoneRelativePosition);
+		for (uint32_t i = 0; i < numBones; i++) {
+			bones[i].boneID = i;
+			bones[i].localPosition = { reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat() };
+			bones[i].localTransform = glm::translate(glm::mat4(1.0f), bones[i].localPosition);
+		}
+		for (uint32_t i = 0; i < numBones; i++) {
+			bones[i].worldPosition = { reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat() };
+		}
+
+		for (uint32_t i = 0; i < numBones; i++) {
+			if (bones[i].parentIndex >= 0) {
+				bones[i].combinedTransform = bones[bones[i].parentIndex].combinedTransform * bones[i].localTransform;
+			}
+			else {
+				bones[i].combinedTransform = bones[i].localTransform;
+			}
+		}
+		for (uint32_t i = 0; i < numBones; i++) {
+			bones[i].offsetMatrix = glm::inverse(bones[i].combinedTransform);
+		}
+
+		
 
 		std::vector<CUSTOMVERTEX> vertexPool;
 
@@ -2605,6 +2696,12 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 		WMBHeader header = WMBHeader();
 		header.Read(reader);
+		if (header.offsetVertexGroups > 0x2000) {
+			reader.SetEndianess(true);
+			fileIsBigEndian = true;
+			reader.Seek(0);
+			header.Read(reader);
+		}
 
 		if (header.cutdataOffset != 0) {
 			hasCutdata = true;
@@ -4231,11 +4328,18 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		TextColor = { 0.0f, 0.98f, 0.467f, 1.0f };
 		nodeType = DAT;
 		fileFilter = L"Platinum File Container(*.dat, *.dtt, *.eff, *.evn, *.eft)\0*.dat;*.dtt;*.eff;*.evn;*.eft;\0";
+		canHaveChildren = true;
 	}
 
 	void DatFileNode::LoadFile() {
 		BinaryReader reader(fileData, false);
 		reader.Seek(0x4);
+		if (reader.GetSize() < 4) {
+			CTDLog::Log::getInstance().LogNote("Empty DAT file!");
+			return; // empty
+		}
+
+
 		if (reader.ReadUINT32() > 1000000) {
 			std::string logName = fileName;
 			logName.pop_back();
@@ -4458,15 +4562,720 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		reader.Seek(0x4);
 		if (reader.ReadUINT32() == 17) {
 			uint32_t triggerCount = reader.ReadUINT32();
-
+			for (uint32_t i = 0; i < triggerCount; i++) {
+				TrgEntry entry{};
+				entry.Read(reader);
+				entries.push_back(entry);
+			}
 
 		}
+
+		return;
 
 
 	}
 
 	void TrgFileNode::SaveFile()
 	{
+	}
+
+	void TrgFileNode::RenderGUI(CruelerContext* ctx)
+	{
+		//CRC32 crc = {};
+		//uint32_t a = ComputeHash("P470_START", crc);
+
+		if (ImGui::BeginTable("TriggerTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+		{
+			ImGui::TableSetupColumn("Conditions");
+			ImGui::TableSetupColumn("Events");
+			ImGui::TableHeadersRow();
+
+			for (TrgEntry& entry : entries)
+			{
+				ImGui::TableNextRow();
+
+				ImGui::TableSetColumnIndex(0);
+				ImGui::TextUnformatted(GetConditionString(entry.conditionID).c_str());
+				ImGui::Separator();
+				ImGui::Text("ID: %d", entry.field_0);
+				ImGui::Text("Phase ID: %d", entry.m_phaseHash);
+				
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextUnformatted(GetActionString(entry.actionID).c_str());
+
+				if (entry.actionID == 138) {
+					BinaryReader br(entry.actionArgs);
+
+
+				}
+				
+
+			}
+
+			ImGui::EndTable();
+		}
+	}
+
+	std::string TrgFileNode::GetConditionString(uint32_t id)
+	{
+		switch (id) {
+		case 0:
+			return "cCondSequence";
+		case 1:
+			return "cCondAnd";
+		case 2:
+			return "cCondOr";
+		case 3:
+			return "cCondTime";
+		case 4:
+			return "cCondArea";
+		case 5:
+			return "cCondAreaGroup";
+		case 6:
+			return "cCondAreaEm";
+		case 7:
+			return "cCondDisorderedSequence";
+		case 8:
+			return "cCondStartAnimation";
+		case 9:
+			return "cCondEndAnimation";
+		case 10:
+			return "cCondPhaseJump";
+		case 11:
+			return "cCondOnce";
+		case 12:
+			return "cCondTrue";
+		case 13:
+			return "cCondIsDoorOpen";
+		case 14:
+			return "cCondPlayerEngGaugeFull";
+		case 15:
+			return "cCondIsScrMeshOn";
+		case 16:
+			return "cCondIsScrMeshOff";
+		case 17:
+			return "cCondIsScrCollisionOn";
+		case 18:
+			return "cCondAreaOut";
+		case 19:
+			return "cCondAreaGroupOut";
+		case 20:
+			return "cCondAreaEmOut";
+		case 21:
+			return "cCondEnemyFinishByNumber";
+		case 22:
+			return "cCondEnemyFinishByName";
+		case 23:
+			return "cCondEnemyCountByNumber";
+		case 24:
+			return "cCondEnemyCountByName";
+		case 25:
+			return "cCondInCamera";
+		case 26:
+			return "cCondOutCamera";
+		case 27:
+			return "cCondEnemyFinishHP0ByNumber";
+		case 28:
+			return "cCondEnemyFinishHP0ByName";
+		case 29:
+			return "cCondEnemyCountHP0ByNumber";
+		case 30:
+			return "cCondEnemyCountHP0ByName";
+		case 31:
+			return "cCondFlag";
+		case 32:
+			return "cCondIsSubstage";
+		case 33:
+			return "cCondPastSubstage";
+		case 34:
+			return "cCondNowPastSubstage";
+		case 35:
+			return "cCondPlayerHpGaugeFull";
+		case 36:
+			return "cCondEnemyNotSetByNumber";
+		case 37:
+			return "cCondEnemyNotSetByName";
+		case 38:
+			return "cCondNotFlag";
+		case 39:
+			return "cCondIsDoorClose";
+		case 40:
+			return "cCondPlayerHpGaugeState";
+		case 41:
+			return "cCondChainBreak";
+		case 42:
+			return "cCondPlayerDie";
+		case 43:
+		case 57:
+			return "cCondRoomEvent";
+		case 44:
+		case 58:
+			return "cCondRoomEventEnd";
+		case 45:
+			return "cCondBehaviorInstruction";
+		case 46:
+			return "cCondConversation";
+		case 47:
+			return "cCondResultFollowMove";
+		case 48:
+			return "cCondIsLoadRoom";
+		case 49:
+			return "cCondHackStart";
+		case 50:
+			return "cCondPlayerEnergyGaugeState";
+		case 51:
+			return "cCondIsEndPlayMovie";
+		case 52:
+		case 127:
+			return "cCondGimmick";
+		case 53:
+			return "cCondIsFileExist";
+		case 54:
+			return "cCondIsNotFileExist";
+		case 55:
+			return "cCondGameFlag";
+		case 56:
+			return "cCondNotGameFlag";
+		case 59:
+		case 128:
+			return "cCondCodecSeqEnd";
+		case 60:
+			return "cCondEnemyEntityCountByNumber";
+		case 61:
+			return "cCondEnemyEntityCountByName";
+		case 62:
+			return "cCondEnemyEntityCountHP0ByNumber";
+		case 63:
+			return "cCondEnemyEntityCountHP0ByName";
+		case 64:
+		case 65:
+			return "cCondRoomEventNotEnd";
+		case 66:
+			return "cCondEnemyGroupFinishByNumber";
+		case 67:
+			return "cCondEnemyGroupFinishByName";
+		case 68:
+			return "cCondEnemyGroupFinishHP0ByNumber";
+		case 69:
+			return "cCondEnemyGroupFinishHP0ByName";
+		case 70:
+			return "cCondEnemyGroupNotSetByNumber";
+		case 71:
+			return "cCondEnemyGroupNotSetByName";
+		case 72:
+			return "cCondIsUIAnimEnd";
+		case 73:
+			return "cCondEnemyGroupCountByNumber";
+		case 74:
+			return "cCondEnemyGroupCountByName";
+		case 75:
+			return "cCondEnemyGroupEntityCountByNumber";
+		case 76:
+			return "cCondEnemyGroupEntityCountByName";
+		case 77:
+			return "cCondEnemyGroupCountHP0ByNumber";
+		case 78:
+			return "cCondEnemyGroupCountHP0ByName";
+		case 79:
+			return "cCondEnemyGroupEntityCountHP0ByNumber";
+		case 80:
+			return "cCondEnemyGroupEntityCountHP0ByName";
+		case 81:
+			return "cCondStaFlag";
+		case 82:
+			return "cCondNotStaFlag";
+		case 83:
+			return "cCondStpFlag";
+		case 84:
+			return "cCondNotStpFlag";
+		case 85:
+			return "cCondHasItem";
+		case 86:
+			return "cCondHasNotItem";
+		case 87:
+			return "cCondIsNowBattle";
+		case 88:
+			return "cCondResultEnd";
+		case 89:
+			return "cCondHostageSaved";
+		case 90:
+			return "cCondLineInfraredHit";
+		case 91:
+			return "cCondIsBattleAreaOn";
+		case 92:
+			return "cCondEnemyFinishDebrisByNumber";
+		case 93:
+			return "cCondEnemyFinishDebrisByName";
+		case 94:
+			return "cCondEnemyGroupFinishDebrisByNumber";
+		case 95:
+			return "cCondEnemyGroupFinishDebrisByName";
+		case 96:
+			return "cCondIsAnimPlay";
+		case 97:
+			return "cCondTimeSta";
+		case 98:
+			return "cCondEnemyFinishCompByNumber";
+		case 99:
+			return "cCondEnemyFinishCompByName";
+		case 100:
+			return "cCondEnemyFinishHPCompByNumber";
+		case 101:
+			return "cCondEnemyFinishHPCompByName";
+		case 102:
+			return "cCondEnemyFinishDebrisCompByNumber";
+		case 103:
+			return "cCondEnemyFinishDebrisCompByName";
+		case 104:
+			return "cCondIsEndAntiqueScroll";
+		case 105:
+			return "cCondIsNowVRMission";
+		case 106:
+			return "cCondVrEnemyGroupFinishByNumber";
+		case 107:
+			return "cCondIsCodec";
+		case 108:
+			return "cCondIsAnyCodec";
+		case 109:
+			return "cCondResetSequence";
+		case 110:
+			return "cCondIsDifficulty";
+		case 111:
+			return "cCondIsZangeki";
+		case 112:
+			return "cCondIsFade";
+		case 113:
+			return "cCondIsFadeEnd";
+		case 114:
+			return "cCondIsRipperMode";
+		case 115:
+		case 116:
+			return "cCondGenericFlag";
+		case 117:
+			return "cCondEnemyGroupIsCautionLevelByNumber";
+		case 118:
+			return "cCondEnemyIsCautionLevelByNumber";
+		case 119:
+			return "cCondScenarioArea";
+		case 120:
+			return "cCondScenarioAreaGroup";
+		case 121:
+			return "cCondScenarioAreaEm";
+		case 122:
+			return "cCondScenarioAreaOut";
+		case 123:
+			return "cCondScenarioAreaGroupOut";
+		case 124:
+			return "cCondScenarioAreaEmOut";
+		case 125:
+			return "cCondAreaPlCam";
+		case 126:
+			return "cCondAreaPlCamOut";
+		case 129:
+			return "cCondKgkArea";
+		case 130:
+			return "cCondFlagDlc2";
+		case 131:
+			return "cCondNotFlagDlc2";
+		case 132:
+			return "cCondFlagDlc3";
+		case 133:
+			return "cCondNotFlagDlc3";
+		default:
+			return "UNKNOWN TRIGGER";
+		}
+
+		return std::string();
+	}
+
+	std::string TrgFileNode::GetActionString(uint32_t id)
+	{
+		switch (id) {
+		case 0:
+		case 7:
+			return "cActAnimation";
+		case 1:
+			return "cActCamera";
+		case 2:
+			return "cActTeleportExplicit";
+		case 3:
+			return "cActStaFlagOn";
+		case 4:
+			return "cActTerminate";
+		case 5:
+			return "cActDoorOpen";
+		case 6:
+			return "cActCamOff";
+		case 8:
+			return "cActScrCollisionOn";
+		case 9:
+			return "cActScrCollisionOff";
+		case 10:
+			return "cActSoftEvent";
+		case 11:
+			return "cActSubphase";
+		case 12:
+			return "cActPhase";
+		case 13:
+			return "cActBoss";
+		case 14:
+			return "cActEnemyByNumber";
+		case 15:
+			return "cActEnemyByName";
+		case 16:
+			return "cActEnemyRetreatByNumber";
+		case 17:
+			return "cActEnemyRetreatByName";
+		case 18:
+			return "cActEnemyClearByNumber";
+		case 19:
+			return "cActEffect";
+		case 20:
+			return "cActResult";
+		case 21:
+			return "cActEnemyByNumberForce";
+		case 22:
+			return "cActEnemyByNameForce";
+		case 23:
+			return "cActTeleportIndex";
+		case 24:
+			return "cActEnemyClearByName";
+		case 25:
+			return "cActTurnOff";
+		case 26:
+			return "cActSE";
+		case 27:
+			return "cActFuncall";
+		case 28:
+		case 82:
+			return "cActTask";
+		case 29:
+			return "cActFollowPath";
+		case 30:
+			return "cActAnimationOrigin";
+		case 31:
+			return "cActCameraDistance";
+		case 33:
+			return "cActCameraDistanceOff";
+		case 34:
+			return "cActCameraFocusOff";
+		case 35:
+			return "cActCameraFocus";
+		case 36:
+			return "cActCameraAngle";
+		case 37:
+			return "cActCameraAngleOff";
+		case 38:
+			return "cActPhaseSubphase";
+		case 39:
+			return "cActDoorClose";
+		case 41:
+			return "cActDebugMessage";
+		case 42:
+			return "cActStage";
+		case 43:
+			return "cActSubstage";
+		case 44:
+			return "cActText";
+		case 45:
+			return "cActFlagOn";
+		case 46:
+			return "cActFlagOff";
+		case 47:
+			return "cActLoadRoom";
+		case 48:
+			return "cActUnloadRoom";
+		case 49:
+			return "cActTextOut";
+		case 50:
+		case 148:
+		case 149:
+		case 150:
+			return "cActEmAnimationByNumber";
+		case 51:
+			return "cActPosIndex";
+		case 52:
+			return "cActEmMsg";
+		case 53:
+			return "cActScene";
+		case 54:
+			return "cActEmMsgDirect";
+		case 55:
+			return "cActCollision";
+		case 56:
+			return "cActBgm";
+		case 57:
+			return "cActBgmSimple";
+		case 58:
+			return "cActSESimple";
+		case 59:
+			return "cActSound";
+		case 60:
+			return "cActCollisionOff";
+		case 61:
+			return "cActSeEntity";
+		case 62:
+		case 90:
+			return "cActRoomEvent";
+		case 63:
+			return "cActEffectRoom";
+		case 64:
+			return "cActPlayerDie";
+		case 65:
+			return "cActEnemyMove";
+		case 66:
+			return "cActReqBehaviorInstruction";
+		case 67:
+			return "cActRaderMap";
+		case 68:
+			return "cActRadioInfoStart";
+		case 69:
+			return "cActRadioInfoEnd";
+		case 70:
+			return "cActConversationStart";
+		case 71:
+			return "cActConversationEnd";
+		case 72:
+			return "cActPathWayStar";
+		case 73:
+			return "cActPathWayEnd";
+		case 74:
+			return "cActTutorialStart";
+		case 75:
+			return "cActTutorialEnd";
+		case 76:
+			return "cActAreaBarrierOff";
+		case 77:
+		case 81:
+			return "cActPlAnimation";
+		case 78:
+			return "cActResultSetDisp";
+		case 79:
+		case 80:
+			return "cActEmAnimation";
+		case 83:
+			return "cActResultSetEndDisp";
+		case 84:
+			return "cActPlayerDeadDemo";
+		case 85:
+			return "cActHackEnd";
+		case 86:
+			return "cActCamFlag";
+		case 88:
+		case 89:
+			return "cActObjAttach";
+		case 91:
+			return "cActQTEButtonDisp";
+		case 92:
+			return "cActEnemyRequestEnd";
+		case 93:
+			return "cActEnemyRequestEndByName";
+		case 94:
+			return "cActEnemyRequestEndBySubPhase";
+		case 95:
+			return "cActEnemyRequestEndAll";
+		case 96:
+			return "cActEnemyRequest";
+		case 97:
+			return "cActEnemyRequestByName";
+		case 98:
+			return "cActEnemyRequestBySubPhase";
+		case 99:
+			return "cActMoviePlay";
+		case 100:
+			return "cActForceBattleFlag";
+		case 101:
+			return "cActGimmickEnable";
+		case 102:
+			return "cActFileRead";
+		case 103:
+			return "cActFileRelease";
+		case 104:
+			return "cActEnemyFirstRequestEnd";
+		case 105:
+			return "cActSceneMovie";
+		case 106:
+			return "cActStopObjectType";
+		case 107:
+			return "cActMvObjectType";
+		case 108:
+			return "cActGameFlagOn";
+		case 109:
+			return "cActGameFlagOff";
+		case 110:
+			return "cActSendSignal";
+		case 111:
+			return "cActSendSignalContext";
+		case 112:
+			return "cActCodecStart";
+		case 113:
+			return "cActObjMeshTrans";
+		case 114:
+			return "cActPlayerEffectOn";
+		case 115:
+			return "cActPlayerEffectOff";
+		case 116:
+			return "cActQTEButtonDispOff";
+		case 117:
+			return "cActObjectivePosSet";
+		case 118:
+			return "cActEnemyGroupByNumber";
+		case 120:
+			return "cActJammingDispStart";
+		case 121:
+			return "cActJammingDispEnd";
+		case 122:
+			return "cActReqGpBehaviorInstruction";
+		case 123:
+			return "cActStaFlagOff";
+		case 124:
+			return "cActUIAnimStart";
+		case 125:
+			return "cActSetNextCodec";
+		case 126:
+			return "cActStpFlagOff";
+		case 127:
+			return "cActStpFlagOn";
+		case 128:
+			return "cActSetUIAnimStartNone";
+		case 129:
+			return "cActSetGameoverNormalFlag";
+		case 130:
+			return "cActScrMeshOn";
+		case 131:
+			return "cActScrMeshOff";
+		case 132:
+			return "cActVmPlay";
+		case 133:
+			return "cActItemGet";
+		case 134:
+			return "cActActionMessageStart";
+		case 135:
+			return "cActActionMessageFlagClear";
+		case 136:
+			return "cActResultRecStart";
+		case 137:
+			return "cActResultRecEnd";
+		case 138:
+			return "cActArray";
+		case 139:
+			return "cActEffectRoomLoop";
+		case 140:
+			return "cActEffectRoomLoopOff";
+		case 141:
+			return "cActMesDispOffSkip";
+		case 142:
+			return "cActEmMsgDirectByNumber";
+		case 143:
+			return "cActCodecEnd";
+		case 144:
+			return "cActAntiqScrMove";
+		case 145:
+			return "cActAntiqScrReqEnd";
+		case 146:
+			return "cActBattleAreaOn";
+		case 147:
+			return "cActBattleAreaOff";
+		case 151:
+			return "cActObjectDisp";
+		case 152:
+			return "cActDoorLock";
+		case 153:
+			return "cActObjectCollision";
+		case 154:
+			return "cActVrComplete";
+		case 155:
+			return "cActVrMistake";
+		case 156:
+			return "cActGimmickFinish";
+		case 157:
+			return "cActGimmickRevert";
+		case 158:
+			return "cActEnemyHide";
+		case 159:
+			return "cActEnemyAppear";
+		case 160:
+			return "cActGimmickRevivalCancel";
+		case 161:
+			return "cActEffectOff";
+		case 162:
+			return "cActCodecEndAll";
+		case 163:
+			return "cActVrGoalPoint";
+		case 164:
+			return "cActFade";
+		case 165:
+			return "cActScrMeshOnAll";
+		case 166:
+			return "cActScrMeshOffAll";
+		case 167:
+			return "cActDoorDispOn";
+		case 168:
+			return "cActDoorDispOff";
+		case 169:
+			return "cActAddExp";
+		case 170:
+			return "cActCodecStartForSkip";
+		case 171:
+			return "cActItemDelInstallation";
+		case 172:
+			return "cActItemDelDropAll";
+		case 173:
+		case 174:
+			return "cActGenericFlag";
+		case 175:
+			return "cActEnemyAppearResetPosByNumber";
+		case 176:
+			return "cActEnemyGroupAppearResetPosByNumber";
+		case 177:
+			return "cActEnemyDestroyByNumber";
+		case 178:
+			return "cActReqVrStart";
+		case 179:
+			return "cActPlayerMaxH";
+		case 180:
+			return "cActPlayerMaxDryCell";
+		case 181:
+			return "cActSeObject";
+		case 182:
+			return "cActItemOnOff";
+		case 183:
+			return "cActNoCodecMenu";
+		case 184:
+			return "cActVrTimerStop";
+		case 185:
+			return "cActCamFocusLock";
+		case 186:
+			return "cActCamFocusLockOff";
+		case 187:
+			return "cActPlKgkPos";
+		case 188:
+			return "cActVrBm6000On";
+		case 189:
+			return "cActVrBm6000Off";
+		case 190:
+			return "cActFlagOnDlc2";
+		case 191:
+			return "cActFlagOffDlc2";
+		case 192:
+			return "cActFlagOnDlc3";
+		case 193:
+			return "cActFlagOffDlc3";
+		case 194:
+			return "cActPlKgkStop";
+		case 195:
+			return "cActVrReturn";
+		case 196:
+			return "cActDoorOpenDelay";
+		case 197:
+			return "cActDoorCloseDelay";
+		case 198:
+			return "cActResultRecStartClear";
+		case 512:
+			return "cActReqShotMissile";
+		default:
+			return "UNKNOWN TRIGGER";
+		}
 	}
 
 	EstFileNode::EstFileNode(std::string fName) : FileNode(fName) {
@@ -4557,6 +5366,8 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 
 	void EstFileNode::RenderGUI(CruelerContext* ctx)
 	{
+		ImGui::TextColored(ImVec4(1, 1, 0, 1), "EST is not yet exportable! Your changes will not be repacked!");
+
 		if (records.size() == 0) {
 			ImGui::Text("There are no records in this EST.");
 		}
@@ -4905,6 +5716,12 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 				ImGui::EndTabBar();
 			}
 
+		}
+				else if (type == B1_CLH) {
+					ImGui::Text("CLH is not currently editable, this is planned in a future (hopefully the next) update");
+		}
+				else if (type == B1_CLW) {
+					ImGui::Text("CLW is not currently editable, this is planned in a future (hopefully the next) update");
 		}
 
 	}

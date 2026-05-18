@@ -168,6 +168,10 @@ public:
         return result;
     }
 
+    bool IsBig() {
+        return isBigEndian;
+    }
+
     // Read raw bytes into a vector
     std::vector<char> ReadBytes(size_t size) {
         if (offset + size > data.size()) {

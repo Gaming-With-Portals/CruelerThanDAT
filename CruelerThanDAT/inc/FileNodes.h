@@ -26,6 +26,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <Camera.h>
 #include <fbxsdk.h>
+#include <shlwapi.h>  // PathFindFileNameW
+#pragma comment(lib, "Shlwapi.lib")
 /**/
 
 class CPKManager;
@@ -118,6 +120,8 @@ namespace HelperFunction {
 	bool WriteVectorToFile(const std::vector<char> dataVec, const std::string& filename);
 }
 
+std::string WCharToString(const wchar_t* wstr);
+
 enum FileNodeTypes {
 	DEFAULT,
 	UNKNOWN,
@@ -159,7 +163,7 @@ public:
 	LPCWSTR fileFilter = L"All Files(*.*)\0*.*;\0";
 	bool loadFailed = false;
 	bool isEdited = false;
-
+	bool canHaveChildren = false;
 	static FileNode* selectedNode;
 
 
@@ -172,6 +176,8 @@ public:
 	virtual ~FileNode();
 
 	virtual void PopupOptionsEx();
+
+	virtual void AppendFile();
 
 	virtual void ExportFile();
 
@@ -679,6 +685,11 @@ enum WmbVersionFormat {
 	WMB0_BAY2
 };
 
+struct TrgItemParams {
+	virtual void Read(BinaryReader& br, int size) = 0;
+	virtual ~TrgItemParams() {}
+};
+
 struct TrgEntry {
 	int field_0;
 	int field_4;
@@ -688,17 +699,47 @@ struct TrgEntry {
 	unsigned int m_actionPhaseHash;
 	float field_18;
 	int field_1C;
-	int conditionToActionSize;
+	int conditionArgSize;
 	int conditionID;
-	int actionToNextTrgSize;
-	int ActionMovie;
+	int actArgSize;
+	int actionID;
+
+	std::vector<char> conditionArgs;
+	std::vector<char> actionArgs;
+
+
+	void Read(BinaryReader& br) {
+		field_0 = br.ReadINT32();
+		field_4 = br.ReadINT32();
+		field_8 = br.ReadINT32();
+		m_phaseHash = br.ReadINT32();
+		field_10 = br.ReadINT32();
+		m_actionPhaseHash = br.ReadINT32();
+		field_18 = br.ReadFloat();
+		field_1C = br.ReadINT32();
+		conditionArgSize = br.ReadINT32();
+		conditionID = br.ReadINT32();
+		if (conditionArgSize - 8 > 0) {
+			conditionArgs = br.ReadBytes(conditionArgSize - 8);
+		}
+		
+		actArgSize = br.ReadINT32();
+		actionID = br.ReadINT32();
+		if (actArgSize - 8 > 0) {
+			actionArgs = br.ReadBytes(actArgSize - 8);
+		}
+	}
 };
 
 class TrgFileNode : public FileNode {
 public:
+	std::vector<TrgEntry> entries;
 	TrgFileNode(std::string fName);
 	void LoadFile() override;
 	void SaveFile() override;
+	void RenderGUI(CruelerContext* ctx);
+	std::string GetConditionString(uint32_t id);
+	std::string GetActionString(uint32_t id);
 
 };
 
