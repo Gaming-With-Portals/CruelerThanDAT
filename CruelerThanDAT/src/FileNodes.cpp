@@ -1470,6 +1470,12 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 		BinaryReader reader(fileData, false);
 		reader.SetEndianess(fileIsBigEndian);
 
+		if (reader.GetSize() < 0x20) {
+			CTDLog::Log::getInstance().LogError("WTA file " + fileName + " is too small to load! (This can probably be ignored)");
+			return;
+		}
+
+
 		reader.Seek(0x4);
 		if (reader.ReadUINT32() == 1) {
 			textureCount = reader.ReadUINT32();
@@ -1755,6 +1761,37 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 			}
 		};
+
+
+		bones.resize(numBones);
+		reader.Seek(offsetBoneHierarchy);
+		for (uint32_t i = 0; i < numBones; i++) {
+			bones[i].parentIndex = reader.ReadINT16();
+		}
+
+		reader.Seek(offsetBoneRelativePosition);
+		for (uint32_t i = 0; i < numBones; i++) {
+			bones[i].boneID = i;
+			bones[i].localPosition = { reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat() };
+			bones[i].localTransform = glm::translate(glm::mat4(1.0f), bones[i].localPosition);
+		}
+		for (uint32_t i = 0; i < numBones; i++) {
+			bones[i].worldPosition = { reader.ReadFloat(), reader.ReadFloat(), reader.ReadFloat() };
+		}
+
+		for (uint32_t i = 0; i < numBones; i++) {
+			if (bones[i].parentIndex >= 0) {
+				bones[i].combinedTransform = bones[bones[i].parentIndex].combinedTransform * bones[i].localTransform;
+			}
+			else {
+				bones[i].combinedTransform = bones[i].localTransform;
+			}
+		}
+		for (uint32_t i = 0; i < numBones; i++) {
+			bones[i].offsetMatrix = glm::inverse(bones[i].combinedTransform);
+		}
+
+		
 
 		std::vector<CUSTOMVERTEX> vertexPool;
 
@@ -2659,6 +2696,12 @@ void LY2FileNode::RenderGUI(CruelerContext *ctx) {
 
 		WMBHeader header = WMBHeader();
 		header.Read(reader);
+		if (header.offsetVertexGroups > 0x2000) {
+			reader.SetEndianess(true);
+			fileIsBigEndian = true;
+			reader.Seek(0);
+			header.Read(reader);
+		}
 
 		if (header.cutdataOffset != 0) {
 			hasCutdata = true;
@@ -4291,6 +4334,12 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 	void DatFileNode::LoadFile() {
 		BinaryReader reader(fileData, false);
 		reader.Seek(0x4);
+		if (reader.GetSize() < 4) {
+			CTDLog::Log::getInstance().LogNote("Empty DAT file!");
+			return; // empty
+		}
+
+
 		if (reader.ReadUINT32() > 1000000) {
 			std::string logName = fileName;
 			logName.pop_back();

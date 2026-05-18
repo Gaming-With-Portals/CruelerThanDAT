@@ -25,11 +25,13 @@
 #include "CPKManager.h"
 #include <TextureHelper.h>
 #include <LanguageManager.h>
+#include <CTDDocument.h>
 
 const glm::uvec2 SCREEN_RESOLUTION = { 1280, 720 };
 std::unordered_map<int, std::string> TEXTURE_DEF = { {0, "Albedo 0"}, {1, "Albedo 1"}, {2, "Normal"}, {3, "Blended Normal"}, {4, "Cubemap"}, {7, "Lightmap"}, {10, "Tension Map"} };
 std::unordered_map<int, std::string> WTA_FLAG_MAP = { {0x20000020, "Regular"}, { 0x30000020, "Transparent (Cutout)" }, { 0xa0000020, "Cubemap" }, {0x22, "Transparent"} };
 std::vector<FileNode*> openFiles;
+std::vector<CTDDocument*> openDocuments;
 
 namespace HelperFunction {
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess, bool bigEndian) {
@@ -65,7 +67,7 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
-		else if (fileType == 5521732) {
+		else if (fileType == 5521732 || (data.size() < 4 && (fileExtension==".dat" || fileExtension == ".dtt" || fileExtension == ".evn" || fileExtension == ".eft" || fileExtension == ".eff"))) {
 			outputFile = new DatFileNode(fileName);
 			if (forceEndianess) {
 				outputFile->fileIsBigEndian = bigEndian;
@@ -149,11 +151,15 @@ namespace HelperFunction {
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
-		else if (fileType == 3299660) {
+		else if (fileType == 3299660 || fileType == 1280913920) {
 			outputFile = new LY2FileNode(fileName);
+			
+
 			if (forceEndianess) {
 				outputFile->fileIsBigEndian = bigEndian;
 			}
+			if (fileType == 1280913920) { outputFile->fileIsBigEndian = true; };
+
 			outputFile->SetFileData(data);
 			outputFile->LoadFile();
 		}
