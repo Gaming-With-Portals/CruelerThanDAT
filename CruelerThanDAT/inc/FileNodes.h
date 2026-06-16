@@ -109,12 +109,11 @@ namespace HelperFunction {
 
 	FileNode* LoadNode(std::string fileName, const std::vector<char>& data, bool forceEndianess = false, bool bigEndian = false);
 
-	int Align(int value, int alignment);
-
 
 	float HalfToFloat(uint16_t h);
 	float PGHalfToFloat(uint16_t h);
 	MGRVector DecodeNormal(uint32_t packed);
+	size_t Align(size_t value, size_t alignment);
 	glm::vec4 DecodeTangent(uint32_t packedTangent);
 
 	bool WriteVectorToFile(const std::vector<char> dataVec, const std::string& filename);

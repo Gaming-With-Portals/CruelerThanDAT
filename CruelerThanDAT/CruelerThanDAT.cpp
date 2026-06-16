@@ -920,6 +920,14 @@ void RenderFrame(CruelerContext *ctx) {
 						if (mat.glFramebuffer == 0 || mat.should_reload_materials) {
 							glEnable(GL_DEPTH_TEST);
 							static WmbFileNode* renderMesh = (WmbFileNode*)FileNodeFromFilepath("Assets/Model/preview.wmb");
+
+							if (mat.glFramebuffer != 0) {
+								glDeleteFramebuffers(1, &mat.glFramebuffer);
+								glDeleteTextures(1, &mat.glFrametexture);
+								glDeleteRenderbuffers(1, &mat.glDepthRBO);
+								mat.glFramebuffer = 0;
+							}
+
 							// Create fbo and render material
 							renderMesh->materials[0] = mat;
 							glGenFramebuffers(1, &mat.glFramebuffer);
@@ -932,11 +940,11 @@ void RenderFrame(CruelerContext *ctx) {
 							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 							glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mat.glFrametexture, 0);
 
-							GLuint depthRBO;
-							glGenRenderbuffers(1, &depthRBO);
-							glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+							glGenRenderbuffers(1, &mat.glDepthRBO);
+							glBindRenderbuffer(GL_RENDERBUFFER, mat.glDepthRBO);
 							glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
-							glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+							glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+								GL_RENDERBUFFER, mat.glDepthRBO);
 
 							glBindFramebuffer(GL_FRAMEBUFFER, mat.glFramebuffer);
 							glViewport(0, 0, 512, 512);

@@ -19,6 +19,7 @@ struct CTDMaterial {
 
     bool highlight = false;
 
+   unsigned int  glDepthRBO = 0;
 };
 
 

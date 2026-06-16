@@ -99,7 +99,8 @@ std::vector<std::string> BXMInternal::SplitString(const std::string& str, char d
 	return result;
 }
 
-int HelperFunction::Align(int value, int alignment) {
+size_t HelperFunction::Align(size_t value, size_t alignment) {
+	assert(alignment > 0 && std::has_single_bit(alignment));
 	return (value + (alignment - 1)) & ~(alignment - 1);
 }
 
@@ -5431,22 +5432,128 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 			infos.push_back(datInfo);
 		}
 
-		for (BayoEffDataInfo info : infos) {
+		for (size_t infoIndex = 0; infoIndex < infos.size(); infoIndex++) {
+			BayoEffDataInfo& info = infos[infoIndex];
 			reader.Seek(info.offset);
-			std::string name = reader.ReadString(4) + ".est";
+			std::string id = reader.ReadString(3);
+			reader.ReadBytes(1);
+			std::string name = this->fileName + id;
 			uint32_t recordNumber = reader.ReadUINT32();
-			FileNode* childNode = HelperFunction::LoadNode(name, reader.ReadBytes(0), fileIsBigEndian, fileIsBigEndian);
-			childNode->parent = this;
-			if (childNode) {
-				children.push_back(childNode);
+			struct ModFileEntry {
+				uint32_t id;
+				uint32_t offset;
+			};
+
+			std::vector<ModFileEntry> entries;
+
+			for (uint32_t i = 0; i < recordNumber; i++) {
+				entries.push_back({ reader.ReadUINT32(), reader.ReadUINT32() });
+			}
+
+			for (size_t i = 0; i < entries.size(); i++) {
+				ModFileEntry& datFile = entries[i];
+				reader.Seek(info.offset + datFile.offset);
+				uint32_t startPos = info.offset + datFile.offset;
+				uint32_t endPos = 0;
+				if (i + 1 < entries.size()) {
+					endPos = info.offset + entries[i+1].offset;
+				}
+				else if (infoIndex + 1 < infos.size()) {
+					endPos = infos[infoIndex + 1].offset;
+				}
+				else {
+					endPos = reader.GetSize();
+				}
+
+				if (endPos == 0) {
+					
+					continue;
+				}
+
+				FileNode* childNode = HelperFunction::LoadNode(
+					std::format("{:08d}.{}", datFile.id, id),
+					reader.ReadBytes(endPos-startPos),
+					fileIsBigEndian,
+					fileIsBigEndian
+				);
+
+				if (childNode) {
+					childNode->parent = this;
+					children.push_back(childNode);
+				}
 			}
 		}
-
-
 	}
+
+	void AlignAndWrite(size_t pos, BinaryWriter* writer) {
+		int targetPosition = HelperFunction::Align(static_cast<int>(pos), 4096);
+		int padding = targetPosition - static_cast<int>(writer->GetData().size());
+		if (padding > 0) {
+			std::vector<char> zeroPadding(padding, 0);
+			writer->WriteBytes(zeroPadding);
+		}
+		writer->Seek(targetPosition);
+	}
+
 
 	void BayoEffNode::SaveFile()
 	{
+		std::unordered_set<std::string> uniqueExtensions;
+
+		for (FileNode* child : children) {
+			child->SaveFile();
+			uniqueExtensions.insert(child->fileExtension);
+
+		}
+
+		BinaryWriter* writer = new BinaryWriter();
+		writer->SetEndianess(fileIsBigEndian);
+		writer->WriteString("EF2");
+		writer->WriteByteZero();
+
+		writer->WriteUINT32(5); // always 5
+
+		std::string chunk_ids[] = {"TEX", "EST", "SST", "MOD", "SAD"};
+		uint32_t chunkPositions[5];
+
+		AlignAndWrite(writer->Tell(), writer);
+
+
+		for (uint32_t i = 0; i < 5; i++) {
+			AlignAndWrite(writer->Tell(), writer);
+			uint32_t chunkBase = writer->Tell();
+			writer->WriteString(chunk_ids[i]);
+
+			std::vector<FileNode*> packChildren;
+			for (FileNode* child : children) {
+				if (child->fileExtension == chunk_ids[i]) {
+					packChildren.push_back(child);
+				}
+			}
+
+			writer->WriteUINT32(packChildren.size());
+
+			uint32_t chunkPtr = 4096;
+
+			for (FileNode* child : packChildren) {
+				size_t dotPos = child->fileName.find('.');
+				uint32_t id = static_cast<uint32_t>(std::stoul(child->fileName.substr(0, dotPos)));
+				writer->WriteUINT32(id);
+				writer->WriteUINT32(chunkPtr);
+
+				chunkPtr = HelperFunction::Align(chunkPtr + child->fileData.size(), 4096);
+				//writer->Seek(chunkPtr);
+				AlignAndWrite(chunkPtr+chunkBase, writer);
+			}
+
+
+		}
+		
+
+		fileData = writer->GetData();
+
+
+
 	}
 
 	BayoClpClhClwFileNode::BayoClpClhClwFileNode(std::string fName) : FileNode(fName)
@@ -5749,10 +5856,17 @@ WWISE::Data002BlobData* Data002Blob = nullptr;
 		int i = 0;
 		for (uint32_t offset : offsets) {
 
-			
+			uint32_t length = 0;
+			if (i + 1 > offsets.size()) {
+				length = offset - offsets[i + 1];
+			}
+			else {
+				length = offset - reader.GetSize();
+			}
+
 			reader.Seek(offset);
 			WtbFileNode* wtbNode = new WtbFileNode(std::to_string(i) + ".wtb");
-			wtbNode->SetFileData(reader.ReadBytes(512000));
+			wtbNode->SetFileData(reader.ReadBytes(length));
 			wtbNode->LoadFile();
 			children.push_back(wtbNode);
 			i += 1;
